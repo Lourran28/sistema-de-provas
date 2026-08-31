@@ -1,0 +1,1 @@
+ALTER TABLE exams ADD COLUMN is_archived BOOLEAN NOT NULL DEFAULT false;

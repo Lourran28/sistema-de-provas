@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: provas_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: provas
+      POSTGRES_USER: provas
+      POSTGRES_PASSWORD: provas
+    ports:
+      - "5432:5432"
+    volumes:
+      - provas_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U provas -d provas"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  provas_postgres_data:
+
