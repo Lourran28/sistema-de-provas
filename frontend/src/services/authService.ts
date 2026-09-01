@@ -3,26 +3,27 @@ import type {
   AuthenticationResponse,
   LoginCredentials,
   ProfileUpdateInput,
-  RegistrationData
+  RegistrationData,
 } from "../types/auth";
+
 import { apiGet, apiPatch, apiPost } from "./httpClient";
 
 export function login(credentials: LoginCredentials) {
-  return apiPost<AuthenticationResponse>("/auth/login", credentials);
+  return apiPost<AuthenticationResponse>("/api/auth/login", credentials);
 }
 
 export function loginDemo() {
-  return apiPost<AuthenticationResponse>("/auth/demo", {});
+  return apiPost<AuthenticationResponse>("/api/auth/demo", {});
 }
 
 export function register(data: RegistrationData) {
-  return apiPost<AuthenticationResponse>("/auth/register", data);
+  return apiPost<AuthenticationResponse>("/api/auth/register", data);
 }
 
 export function getCurrentUser() {
-  return apiGet<AuthenticatedUser>("/auth/me");
+  return apiGet<AuthenticatedUser>("/api/auth/me");
 }
 
 export function updateProfile(input: ProfileUpdateInput) {
-  return apiPatch<AuthenticatedUser>("/auth/me", input);
+  return apiPatch<AuthenticatedUser>("/api/auth/me", input);
 }
