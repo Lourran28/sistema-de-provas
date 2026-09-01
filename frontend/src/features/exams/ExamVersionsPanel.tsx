@@ -1,11 +1,12 @@
-import { KeyRound, Printer, Shuffle } from "lucide-react";
+import { Download, FileText, KeyRound, Printer, Shuffle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Button } from "../../components/ui/Button";
+import { ModalDialog } from "../../components/ui/ModalDialog";
 import { useConfirmation } from "../../components/ui/confirmationContext";
 import { ApiRequestError } from "../../services/httpClient";
-import { generateExamVersions, getExamVersions } from "../../services/examService";
+import { downloadExamVersion, generateExamVersions, getExamVersions } from "../../services/examService";
 import type { Exam, ExamVersion } from "../../types/exams";
 
 type ExamVersionsPanelProps = {
@@ -20,6 +21,10 @@ export function ExamVersionsPanel({ exam, onVersionsGenerated }: ExamVersionsPan
   const [selectedVersionId, setSelectedVersionId] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<"pdf" | "docx">("pdf");
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const [error, setError] = useState("");
 
   const loadVersions = useCallback(async () => {
@@ -70,6 +75,22 @@ export function ExamVersionsPanel({ exam, onVersionsGenerated }: ExamVersionsPan
       setError(getErrorMessage(requestError, "Não foi possível gerar as versões oficiais."));
     } finally {
       setIsGenerating(false);
+    }
+  }
+
+  async function handleDownload() {
+    if (!selectedVersion) {
+      return;
+    }
+    setIsExporting(true);
+    setExportError("");
+    try {
+      await downloadExamVersion(selectedVersion.id, exportFormat);
+      setIsExportDialogOpen(false);
+    } catch (requestError) {
+      setExportError(getErrorMessage(requestError, "Não foi possível gerar o arquivo da prova."));
+    } finally {
+      setIsExporting(false);
     }
   }
 
@@ -127,6 +148,9 @@ export function ExamVersionsPanel({ exam, onVersionsGenerated }: ExamVersionsPan
                 <p className="mt-1 text-sm text-slate-500">{selectedVersion.questions.length} questões · {formatScore(exam.totalScore)}</p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
+                <Button icon={Download} onClick={() => setIsExportDialogOpen(true)} variant="secondary">
+                  Baixar arquivo
+                </Button>
                 <Button icon={Printer} onClick={() => navigate(`/imprimir/versoes/${selectedVersion.id}`)} variant="secondary">
                   Imprimir
                 </Button>
@@ -170,6 +194,55 @@ export function ExamVersionsPanel({ exam, onVersionsGenerated }: ExamVersionsPan
             </ol>
           </article>
         </div>
+      ) : null}
+
+      {isExportDialogOpen && selectedVersion ? (
+        <ModalDialog
+          onClose={() => {
+            if (!isExporting) {
+              setIsExportDialogOpen(false);
+              setExportError("");
+            }
+          }}
+          size="lg"
+          title={`Baixar versão ${selectedVersion.label}`}
+        >
+          <div className="space-y-5 px-5 py-6 sm:px-6">
+            <fieldset>
+              <legend className="text-sm font-semibold text-slate-900">Formato do arquivo</legend>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <label className={`flex min-h-24 cursor-pointer items-center gap-3 border p-4 transition ${exportFormat === "pdf" ? "border-teal-700 bg-teal-50" : "border-stone-300 bg-white hover:border-slate-400"}`}>
+                  <input checked={exportFormat === "pdf"} name="exam-export-format" onChange={() => setExportFormat("pdf")} type="radio" value="pdf" />
+                  <span>
+                    <strong className="block text-sm text-slate-950">PDF</strong>
+                    <span className="mt-1 block text-xs leading-5 text-slate-600">Pronto para imprimir ou compartilhar.</span>
+                  </span>
+                </label>
+                <label className={`flex min-h-24 cursor-pointer items-center gap-3 border p-4 transition ${exportFormat === "docx" ? "border-teal-700 bg-teal-50" : "border-stone-300 bg-white hover:border-slate-400"}`}>
+                  <input checked={exportFormat === "docx"} name="exam-export-format" onChange={() => setExportFormat("docx")} type="radio" value="docx" />
+                  <span>
+                    <strong className="block text-sm text-slate-950">Word (.docx)</strong>
+                    <span className="mt-1 block text-xs leading-5 text-slate-600">Editável antes de imprimir.</span>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
+
+            {exportError ? (
+              <p aria-live="polite" className="border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" role="alert">
+                {exportError}
+              </p>
+            ) : null}
+          </div>
+          <footer className="flex flex-col-reverse gap-3 border-t border-stone-200 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+            <Button disabled={isExporting} onClick={() => setIsExportDialogOpen(false)} variant="secondary">
+              Cancelar
+            </Button>
+            <Button disabled={isExporting} icon={FileText} onClick={() => void handleDownload()}>
+              {isExporting ? "Preparando arquivo..." : `Baixar ${exportFormat === "pdf" ? "PDF" : "Word"}`}
+            </Button>
+          </footer>
+        </ModalDialog>
       ) : null}
     </section>
   );

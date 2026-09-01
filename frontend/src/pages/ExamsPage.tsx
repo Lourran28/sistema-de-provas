@@ -9,7 +9,7 @@ import { clearExams, deleteExam, getExams } from "../services/examService";
 import { ApiRequestError } from "../services/httpClient";
 import { ModalDialog } from "../components/ui/ModalDialog";
 import { getSubjects } from "../services/subjectService";
-import { examStatusLabels, type Exam, type ExamPage } from "../types/exams";
+import { examKindLabels, examStatusLabels, type Exam, type ExamPage } from "../types/exams";
 import type { Subject } from "../types/contents";
 
 const initialPage: ExamPage = {
@@ -155,7 +155,7 @@ export function ExamsPage() {
                   <tr key={exam.id}>
                     <td className="px-5 py-4">
                       <p className="font-semibold text-slate-900">{exam.title}</p>
-                      <p className="mt-1 text-xs text-slate-500">{exam.classGroup ?? "Sem turma"}</p>
+                      <p className="mt-1 text-xs text-slate-500">{examKindLabels[exam.kind]} · {exam.classGroup ?? "Sem turma"}</p>
                     </td>
                     <td className="px-5 py-4 text-slate-600">{exam.subjectId ? subjectNames.get(exam.subjectId) ?? "Disciplina removida" : "Sem disciplina"}</td>
                     <td className="px-5 py-4 text-slate-600">{exam.questionCount}</td>
@@ -177,7 +177,7 @@ export function ExamsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-slate-900">{exam.title}</p>
-                    <p className="mt-1 text-xs text-slate-500">{exam.classGroup ?? "Sem turma"} · {exam.questionCount} questões · {formatScore(exam.totalScore)}</p>
+                    <p className="mt-1 text-xs text-slate-500">{examKindLabels[exam.kind]} · {exam.classGroup ?? "Sem turma"} · {exam.questionCount} questões · {formatScore(exam.totalScore)}</p>
                   </div>
                   <ExamActions deletingExamId={deletingExamId} exam={exam} onRemove={removeExam} onReview={() => navigate(`/provas/${exam.id}`)} />
                 </div>

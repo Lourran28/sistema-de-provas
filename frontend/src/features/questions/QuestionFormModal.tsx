@@ -1,5 +1,5 @@
-import { CircleCheck, Plus, Save, Trash2 } from "lucide-react";
-import { type FormEvent, useMemo, useState } from "react";
+import { CircleCheck, ImagePlus, Plus, Save, Trash2, X } from "lucide-react";
+import { type ChangeEvent, type FormEvent, useMemo, useState } from "react";
 
 import { Button } from "../../components/ui/Button";
 import { ModalDialog } from "../../components/ui/ModalDialog";
@@ -16,6 +16,8 @@ type QuestionFormModalProps = {
 };
 
 const emptyAlternatives = [{ text: "" }, { text: "" }];
+const MAX_INPUT_IMAGE_SIZE = 8 * 1024 * 1024;
+const MAX_STORED_IMAGE_LENGTH = 600000;
 
 export function QuestionFormModal({ contents, onClose, onSave, question, subjects }: QuestionFormModalProps) {
   const initialContentId = question?.contentIds[0] ?? "";
@@ -33,6 +35,7 @@ export function QuestionFormModal({ contents, onClose, onSave, question, subject
   });
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
 
   const sortedContents = useMemo(() => [...contents].sort((first, second) => first.title.localeCompare(second.title, "pt-BR")), [contents]);
 
@@ -68,6 +71,24 @@ export function QuestionFormModal({ contents, onClose, onSave, question, subject
       }
       return current;
     });
+  }
+
+  async function selectImage(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    setError("");
+    setIsProcessingImage(true);
+    try {
+      setImageUrl(await compressQuestionImage(file));
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "Não foi possível preparar a imagem.");
+    } finally {
+      setIsProcessingImage(false);
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -170,7 +191,7 @@ export function QuestionFormModal({ contents, onClose, onSave, question, subject
             </label>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px] sm:items-end">
+          <div className="space-y-3">
             <label className="block text-sm font-medium text-slate-700" htmlFor="question-image-url">
               Imagem de apoio (URL opcional)
               <input
@@ -183,10 +204,39 @@ export function QuestionFormModal({ contents, onClose, onSave, question, subject
                 value={imageUrl}
               />
             </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <label
+                className={`inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 ${isProcessingImage ? "cursor-wait opacity-60" : ""}`}
+                htmlFor="question-image-file"
+              >
+                <ImagePlus aria-hidden="true" size={18} />
+                {isProcessingImage ? "Preparando imagem..." : "Selecionar imagem"}
+              </label>
+              <input
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                disabled={isProcessingImage}
+                id="question-image-file"
+                onChange={selectImage}
+                type="file"
+              />
+              {imageUrl.trim() ? (
+                <Button
+                  aria-label="Remover imagem de apoio"
+                  className="h-9 w-9 px-0"
+                  icon={X}
+                  onClick={() => setImageUrl("")}
+                  title="Remover imagem"
+                  type="button"
+                  variant="ghost"
+                />
+              ) : null}
+              <p className="text-xs text-slate-500">PNG, JPEG ou WebP de até 8 MB. A imagem é reduzida antes de salvar.</p>
+            </div>
             {imageUrl.trim() ? (
               <img
                 alt="Prévia da imagem de apoio"
-                className="h-24 w-full border border-stone-200 bg-stone-50 object-contain"
+                className="max-h-72 w-full border border-stone-200 bg-stone-50 object-contain"
                 referrerPolicy="no-referrer"
                 src={imageUrl.trim()}
               />
@@ -259,7 +309,7 @@ export function QuestionFormModal({ contents, onClose, onSave, question, subject
           <Button disabled={isSubmitting} onClick={onClose} type="button" variant="secondary">
             Cancelar
           </Button>
-          <Button disabled={isSubmitting} icon={Save} type="submit">
+          <Button disabled={isSubmitting || isProcessingImage} icon={Save} type="submit">
             {isSubmitting ? "Salvando..." : "Salvar questão"}
           </Button>
         </footer>
@@ -270,4 +320,54 @@ export function QuestionFormModal({ contents, onClose, onSave, question, subject
 
 function getErrorMessage(error: unknown) {
   return error instanceof ApiRequestError ? error.message : "Não foi possível salvar a questão.";
+}
+
+async function compressQuestionImage(file: File) {
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+    throw new Error("Selecione uma imagem PNG, JPEG ou WebP.");
+  }
+  if (file.size > MAX_INPUT_IMAGE_SIZE) {
+    throw new Error("A imagem escolhida deve ter no máximo 8 MB.");
+  }
+
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const image = await loadImage(sourceUrl);
+    const scale = Math.min(1, 1600 / Math.max(image.width, image.height));
+    const width = Math.max(1, Math.round(image.width * scale));
+    const height = Math.max(1, Math.round(image.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("Não foi possível preparar a imagem.");
+    }
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+
+    let quality = 0.88;
+    let compressedImage = canvas.toDataURL("image/jpeg", quality);
+    while (compressedImage.length > MAX_STORED_IMAGE_LENGTH && quality > 0.5) {
+      quality -= 0.1;
+      compressedImage = canvas.toDataURL("image/jpeg", quality);
+    }
+    if (compressedImage.length > MAX_STORED_IMAGE_LENGTH) {
+      throw new Error("A imagem ficou grande demais. Escolha uma imagem menor ou recortada.");
+    }
+    return compressedImage;
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
+
+function loadImage(sourceUrl: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Não foi possível ler a imagem escolhida."));
+    image.src = sourceUrl;
+  });
 }

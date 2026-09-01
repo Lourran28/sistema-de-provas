@@ -25,6 +25,7 @@ import br.com.provas.dtos.exams.GeneratedExamContentRequest;
 import br.com.provas.entities.ContentEntity;
 import br.com.provas.entities.ExamContentEntity;
 import br.com.provas.entities.ExamEntity;
+import br.com.provas.entities.ExamKind;
 import br.com.provas.entities.ExamQuestionEntity;
 import br.com.provas.entities.ExamStatus;
 import br.com.provas.entities.QuestionDistributionMode;
@@ -111,6 +112,8 @@ public class ExamService {
             throw new IllegalArgumentException("Uma questão não pode ser adicionada mais de uma vez à prova.");
         }
 
+        ExamKind kind = resolveExamKind(request.kind(), ExamKind.PROVA);
+        validateQuestionCountForKind(kind, request.questionIds().size());
         UUID subjectId = resolveSubjectId(teacherId, request.subjectId());
         List<QuestionEntity> questions = questionService.findEntities(teacherId, request.questionIds());
         validateQuestionsForSubject(questions, subjectId);
@@ -125,7 +128,8 @@ public class ExamService {
                 request.instructions(),
                 request.examDate(),
                 request.totalScore(),
-                questions.size());
+                questions.size(),
+                kind);
         persistExamQuestions(exam, questions);
         return toResponse(exam);
     }
@@ -135,6 +139,8 @@ public class ExamService {
         ExamEntity exam = findEntity(teacherId, examId);
         ensureDraft(exam);
 
+        ExamKind kind = resolveExamKind(request.kind(), exam.getKind());
+        validateQuestionCountForKind(kind, request.questionIds().size());
         UUID subjectId = resolveSubjectId(teacherId, request.subjectId());
         List<QuestionEntity> questions = questionService.findEntities(teacherId, request.questionIds());
         validateQuestionsForSubject(questions, subjectId);
@@ -148,7 +154,8 @@ public class ExamService {
                 normalizeOptional(request.instructions()),
                 request.examDate(),
                 request.totalScore().setScale(2, RoundingMode.HALF_UP),
-                questions.size());
+                questions.size(),
+                kind);
         examRepository.save(exam);
         examQuestionRepository.deleteByExamId(examId);
         persistExamQuestions(exam, questions);
@@ -164,6 +171,8 @@ public class ExamService {
         if (request.totalQuestions() < requestedContents.size()) {
             throw new IllegalArgumentException("A quantidade de questões deve ser igual ou maior que a quantidade de conteúdos selecionados.");
         }
+        ExamKind kind = resolveExamKind(request.kind(), ExamKind.PROVA);
+        validateQuestionCountForKind(kind, request.totalQuestions());
 
         UUID subjectId = resolveSubjectId(teacherId, request.subjectId());
         List<ContentEntity> contents = requestedContents.stream()
@@ -182,7 +191,8 @@ public class ExamService {
                 request.instructions(),
                 request.examDate(),
                 request.totalScore(),
-                request.totalQuestions());
+                request.totalQuestions(),
+                kind);
 
         List<ExamContentEntity> examContents = contents.stream()
                 .map(content -> new ExamContentEntity(exam.getId(), content.getId(), questionCountByContent.get(content.getId())))
@@ -292,7 +302,8 @@ public class ExamService {
             String instructions,
             LocalDate examDate,
             BigDecimal totalScore,
-            int questionCount) {
+            int questionCount,
+            ExamKind kind) {
         return examRepository.save(new ExamEntity(
                 teacherId,
                 subjectId,
@@ -303,7 +314,8 @@ public class ExamService {
                 normalizeOptional(instructions),
                 examDate,
                 totalScore.setScale(2, RoundingMode.HALF_UP),
-                questionCount));
+                questionCount,
+                kind));
     }
 
     private void persistExamQuestions(ExamEntity exam, List<QuestionEntity> questions) {
@@ -399,6 +411,16 @@ public class ExamService {
                 .anyMatch(content -> content.getSubjectId() != null && !subjectId.equals(content.getSubjectId()));
         if (hasAnotherSubject) {
             throw new IllegalArgumentException("Todos os conteúdos com disciplina devem pertencer à disciplina da prova.");
+        }
+    }
+
+    private ExamKind resolveExamKind(ExamKind requestedKind, ExamKind fallbackKind) {
+        return requestedKind == null ? fallbackKind : requestedKind;
+    }
+
+    private void validateQuestionCountForKind(ExamKind kind, int questionCount) {
+        if (kind == ExamKind.SIMULADO && questionCount != 21) {
+            throw new IllegalArgumentException("O simulado deve possuir exatamente 21 questões.");
         }
     }
 

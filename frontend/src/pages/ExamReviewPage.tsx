@@ -14,7 +14,7 @@ import { approveExam, getExam, regenerateExamQuestion, toggleQuestionCancellatio
 import { ApiRequestError } from "../services/httpClient";
 import { getQuestions } from "../services/questionService";
 import { getSubjects } from "../services/subjectService";
-import { examStatusLabels, type Exam, type ExamInput } from "../types/exams";
+import { examKindLabels, examStatusLabels, type Exam, type ExamInput } from "../types/exams";
 import type { Content, Subject } from "../types/contents";
 import type { Question } from "../types/questions";
 
@@ -187,6 +187,7 @@ export function ExamReviewPage() {
         <div>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold text-slate-950">{exam.title}</h1>
+            <span className="rounded-md bg-teal-50 px-2 py-1 text-xs font-semibold text-teal-800">{examKindLabels[exam.kind]}</span>
             <span className="rounded-md bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">{examStatusLabels[exam.status]}</span>
           </div>
           <p className="mt-2 text-sm text-slate-500">

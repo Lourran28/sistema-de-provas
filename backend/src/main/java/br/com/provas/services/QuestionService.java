@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -36,6 +37,8 @@ import br.com.provas.services.generation.GeneratedQuestionDraft;
 
 @Service
 public class QuestionService {
+
+    private static final Pattern IMAGE_DATA_URL = Pattern.compile("^data:image/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$");
 
     private final QuestionRepository questionRepository;
     private final AlternativeRepository alternativeRepository;
@@ -311,6 +314,9 @@ public class QuestionService {
         if (imageUrl == null) {
             return null;
         }
+        if (IMAGE_DATA_URL.matcher(imageUrl).matches()) {
+            return imageUrl;
+        }
         try {
             URI uri = new URI(imageUrl);
             String scheme = uri.getScheme();
@@ -320,7 +326,7 @@ public class QuestionService {
         } catch (URISyntaxException ignored) {
             // The validation message below is clearer for the person filling in the form.
         }
-        throw new IllegalArgumentException("A imagem da questão deve usar uma URL HTTP ou HTTPS válida.");
+        throw new IllegalArgumentException("A imagem da questão deve ser um arquivo PNG, JPEG ou WebP, ou usar uma URL HTTP ou HTTPS válida.");
     }
 
     private boolean deleteOrArchive(QuestionEntity question) {

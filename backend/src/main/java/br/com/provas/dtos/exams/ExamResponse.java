@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.UUID;
 
 import br.com.provas.entities.ExamEntity;
+import br.com.provas.entities.ExamKind;
 import br.com.provas.entities.ExamStatus;
 
 public record ExamResponse(
@@ -20,6 +21,7 @@ public record ExamResponse(
         LocalDate examDate,
         BigDecimal totalScore,
         int questionCount,
+        ExamKind kind,
         ExamStatus status,
         List<ExamContentResponse> contents,
         List<ExamQuestionResponse> questions,
@@ -41,6 +43,7 @@ public record ExamResponse(
                 exam.getExamDate(),
                 exam.getTotalScore(),
                 exam.getQuestionCount(),
+                exam.getKind(),
                 exam.getStatus(),
                 contents,
                 questions,

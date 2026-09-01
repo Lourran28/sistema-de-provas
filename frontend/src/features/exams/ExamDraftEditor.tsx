@@ -3,7 +3,7 @@ import { type FormEvent, useMemo, useState } from "react";
 
 import { Button } from "../../components/ui/Button";
 import { ApiRequestError } from "../../services/httpClient";
-import type { Exam, ExamInput } from "../../types/exams";
+import { examKindLabels, type Exam, type ExamInput } from "../../types/exams";
 import type { Content, Subject } from "../../types/contents";
 import { difficultyLabels, type Question } from "../../types/questions";
 
@@ -82,6 +82,10 @@ export function ExamDraftEditor({ contents, exam, isSaving, onCancel, onSave, qu
       setError("Selecione pelo menos uma questão para salvar a prova.");
       return;
     }
+    if (exam.kind === "SIMULADO" && selectedQuestionIds.length !== 21) {
+      setError("O simulado precisa ter exatamente 21 questões.");
+      return;
+    }
     if (!Number.isFinite(score) || score <= 0) {
       setError("Informe uma nota total maior que zero.");
       return;
@@ -96,7 +100,8 @@ export function ExamDraftEditor({ contents, exam, isSaving, onCancel, onSave, qu
         instructions: instructions || undefined,
         examDate: examDate || undefined,
         totalScore: score,
-        questionIds: selectedQuestionIds
+        questionIds: selectedQuestionIds,
+        kind: exam.kind
       });
     } catch (requestError) {
       setError(requestError instanceof ApiRequestError ? requestError.message : "Não foi possível salvar o rascunho.");
@@ -162,10 +167,11 @@ export function ExamDraftEditor({ contents, exam, isSaving, onCancel, onSave, qu
           <p className="text-sm font-semibold text-slate-950">Resumo</p>
           <dl className="mt-4 space-y-3 text-sm">
             <div className="flex items-center justify-between gap-3"><dt className="text-slate-600">Questões</dt><dd className="font-semibold text-slate-950">{selectedQuestionIds.length}</dd></div>
+            <div className="flex items-center justify-between gap-3"><dt className="text-slate-600">Formato</dt><dd className="font-semibold text-slate-950">{examKindLabels[exam.kind]}</dd></div>
             <div className="flex items-center justify-between gap-3"><dt className="text-slate-600">Nota total</dt><dd className="font-semibold text-slate-950">{formatScore(Number(totalScore || 0))}</dd></div>
             <div className="flex items-center justify-between gap-3"><dt className="text-slate-600">Por questão</dt><dd className="font-semibold text-slate-950">{selectedQuestionIds.length ? formatScore(scorePerQuestion) : "-"}</dd></div>
           </dl>
-          <p className="mt-5 border-t border-stone-200 pt-4 text-xs leading-5 text-slate-500">A nota será redistribuída automaticamente conforme a ordem das questões selecionadas.</p>
+          <p className="mt-5 border-t border-stone-200 pt-4 text-xs leading-5 text-slate-500">{exam.kind === "SIMULADO" ? "O simulado precisa permanecer com 21 questões." : "A nota será redistribuída automaticamente conforme a ordem das questões selecionadas."}</p>
         </aside>
       </section>
 

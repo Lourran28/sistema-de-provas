@@ -244,6 +244,7 @@ export function ContentsPage() {
           onClose={() => setIsContentModalOpen(false)}
           onSave={saveContent}
           subjects={subjects}
+          topics={topics}
         />
       ) : null}
 

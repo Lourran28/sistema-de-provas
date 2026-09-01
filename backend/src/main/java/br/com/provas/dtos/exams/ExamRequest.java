@@ -11,6 +11,8 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+import br.com.provas.entities.ExamKind;
+
 public record ExamRequest(
         UUID subjectId,
         @NotBlank(message = "Informe o título da prova.")
@@ -30,5 +32,19 @@ public record ExamRequest(
         BigDecimal totalScore,
         @NotEmpty(message = "Selecione pelo menos uma questão.")
         @Size(max = 100, message = "A prova pode possuir no máximo 100 questões.")
-        List<UUID> questionIds) {
+        List<UUID> questionIds,
+        ExamKind kind) {
+
+    public ExamRequest(
+            UUID subjectId,
+            String title,
+            String classGroup,
+            String topic,
+            String description,
+            String instructions,
+            LocalDate examDate,
+            BigDecimal totalScore,
+            List<UUID> questionIds) {
+        this(subjectId, title, classGroup, topic, description, instructions, examDate, totalScore, questionIds, ExamKind.PROVA);
+    }
 }

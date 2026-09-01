@@ -13,8 +13,8 @@ import {
   LogOut,
   Menu,
   ScanLine,
+  School,
   UserRound,
-  UsersRound,
   X
 } from "lucide-react";
 import { useState } from "react";
@@ -27,10 +27,10 @@ import { useApiHealth } from "../hooks/useApiHealth";
 const navigation = [
   { to: "/dashboard", label: "Dashboard", icon: Home },
   { to: "/provas", label: "Minhas Provas", icon: Files },
-  { to: "/criar-prova", label: "Criar Prova", icon: FilePlus2 },
-  { to: "/gerar-prova", label: "Gerar Prova", icon: ClipboardCheck },
+  { to: "/criar-prova", label: "Montar manualmente", icon: FilePlus2 },
+  { to: "/gerar-prova", label: "Gerar por conteúdo", icon: ClipboardCheck },
   { to: "/conteudos", label: "Meus Conteúdos", icon: LibraryBig },
-  { to: "/alunos", label: "Alunos e turmas", icon: UsersRound },
+  { to: "/alunos", label: "Turmas", icon: School },
   { to: "/questoes", label: "Banco de Questões", icon: BookOpen },
   { to: "/correcao", label: "Correção", icon: ScanLine },
   { to: "/correcao-em-lote", label: "Correção em lote", icon: Files },

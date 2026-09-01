@@ -4,13 +4,14 @@ import { useNavigate } from "react-router-dom";
 
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
+import { ExamCreationModeSwitch } from "../features/exams/ExamCreationModeSwitch";
 import { getContents } from "../services/contentService";
 import { generateExam } from "../services/examService";
 import { ApiRequestError } from "../services/httpClient";
 import { getSubjects } from "../services/subjectService";
 import type { Content, Subject } from "../types/contents";
 import { difficultyLabels, type QuestionDifficulty } from "../types/questions";
-import type { QuestionDistributionMode } from "../types/exams";
+import { examKindLabels, type ExamKind, type QuestionDistributionMode } from "../types/exams";
 
 export function GenerateExamPage() {
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ export function GenerateExamPage() {
   const [topic, setTopic] = useState("");
   const [totalScore, setTotalScore] = useState("10");
   const [totalQuestions, setTotalQuestions] = useState("5");
+  const [kind, setKind] = useState<ExamKind>("PROVA");
   const [difficulty, setDifficulty] = useState<QuestionDifficulty>("MEDIUM");
   const [distributionMode, setDistributionMode] = useState<QuestionDistributionMode>("AUTO");
   const [selectedContentIds, setSelectedContentIds] = useState<string[]>([]);
@@ -59,6 +61,21 @@ export function GenerateExamPage() {
     () => selectedContentIds.map((contentId) => contents.find((content) => content.id === contentId)).filter((content): content is Content => Boolean(content)),
     [contents, selectedContentIds]
   );
+  const topicOptions = useMemo(
+    () => [...new Set(
+      contents
+        .filter((content) => !subjectId || content.subjectId === subjectId)
+        .map((content) => content.topic)
+    )].sort((left, right) => left.localeCompare(right, "pt-BR")),
+    [contents, subjectId]
+  );
+  const availableContents = useMemo(
+    () => contents.filter((content) => (
+      (!subjectId || content.subjectId === subjectId)
+      && (!topic || content.topic.localeCompare(topic, "pt-BR", { sensitivity: "accent" }) === 0)
+    )),
+    [contents, subjectId, topic]
+  );
   const questionCount = Math.max(0, Number(totalQuestions) || 0);
   const automaticCounts = useMemo(() => calculateAutoDistribution(questionCount, selectedContents.length), [questionCount, selectedContents.length]);
   const manualTotal = selectedContents.reduce((total, content) => total + (Number(manualCounts[content.id]) || 0), 0);
@@ -80,6 +97,26 @@ export function GenerateExamPage() {
     }
   }
 
+  function changeSubject(nextSubjectId: string) {
+    setSubjectId(nextSubjectId);
+    setTopic("");
+    setSelectedContentIds([]);
+    setManualCounts({});
+  }
+
+  function changeTopic(nextTopic: string) {
+    setTopic(nextTopic);
+    setSelectedContentIds([]);
+    setManualCounts({});
+  }
+
+  function changeKind(nextKind: ExamKind) {
+    setKind(nextKind);
+    if (nextKind === "SIMULADO") {
+      setTotalQuestions("21");
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
@@ -90,6 +127,10 @@ export function GenerateExamPage() {
     }
     if (questionCount < selectedContents.length) {
       setError("A quantidade de questões deve ser igual ou maior que a quantidade de conteúdos selecionados.");
+      return;
+    }
+    if (kind === "SIMULADO" && questionCount !== 21) {
+      setError("O simulado precisa ter exatamente 21 questões.");
       return;
     }
     if (distributionMode === "MANUAL" && manualTotal !== questionCount) {
@@ -108,6 +149,7 @@ export function GenerateExamPage() {
         totalQuestions: questionCount,
         difficulty,
         distributionMode,
+        kind,
         contents: selectedContents.map((content, index) => ({
           contentId: content.id,
           questionCount: distributionMode === "AUTO" ? automaticCounts[index] : Number(manualCounts[content.id])
@@ -126,18 +168,42 @@ export function GenerateExamPage() {
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-slate-950">Gerar Prova</h1>
-          <p className="mt-1 text-sm text-slate-500">Crie um rascunho usando somente os conteúdos que você selecionar.</p>
+          <p className="mt-1 text-sm text-slate-500">Crie um rascunho automático usando somente os conteúdos que você selecionar.</p>
         </div>
         <Button disabled={isSubmitting || isLoading} icon={Sparkles} type="submit">
           {isSubmitting ? "Gerando..." : "Gerar rascunho"}
         </Button>
       </section>
 
+      <ExamCreationModeSwitch mode="generated" />
+
       {error ? (
         <div aria-live="polite" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
           {error}
         </div>
       ) : null}
+
+      <fieldset className="border-y border-stone-200 py-5">
+        <legend className="text-sm font-medium text-slate-700">Formato</legend>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {(["PROVA", "SIMULADO"] as ExamKind[]).map((option) => (
+            <label
+              className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm font-medium ${kind === option ? "border-teal-700 bg-teal-50 text-teal-900" : "border-stone-300 bg-white text-slate-700"}`}
+              key={option}
+            >
+              <input
+                checked={kind === option}
+                className="h-4 w-4 border-stone-300 text-teal-700 focus:ring-teal-700"
+                name="generated-exam-kind"
+                onChange={() => changeKind(option)}
+                type="radio"
+              />
+              <span>{option === "SIMULADO" ? "Simulado (21 questões)" : examKindLabels[option]}</span>
+            </label>
+          ))}
+        </div>
+        {kind === "SIMULADO" ? <p className="mt-2 text-xs leading-5 text-slate-500">O total foi definido em 21 questões para este simulado.</p> : null}
+      </fieldset>
 
       <section className="grid gap-5 lg:grid-cols-3">
         <label className="block text-sm font-medium text-slate-700" htmlFor="generated-exam-title">
@@ -156,7 +222,7 @@ export function GenerateExamPage() {
           <select
             className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-800 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
             id="generated-exam-subject"
-            onChange={(event) => setSubjectId(event.target.value)}
+            onChange={(event) => changeSubject(event.target.value)}
             value={subjectId}
           >
             <option value="">Sem disciplina</option>
@@ -178,14 +244,16 @@ export function GenerateExamPage() {
           />
         </label>
         <label className="block text-sm font-medium text-slate-700" htmlFor="generated-exam-topic">
-          Assunto
-          <input
-            className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-950 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
+          Assunto do banco
+          <select
+            className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-800 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
             id="generated-exam-topic"
-            maxLength={160}
-            onChange={(event) => setTopic(event.target.value)}
+            onChange={(event) => changeTopic(event.target.value)}
             value={topic}
-          />
+          >
+            <option value="">Todos os assuntos</option>
+            {topicOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+          </select>
         </label>
         <label className="block text-sm font-medium text-slate-700" htmlFor="generated-exam-total-score">
           Nota total
@@ -207,6 +275,7 @@ export function GenerateExamPage() {
             id="generated-exam-question-count"
             min="1"
             max="100"
+            disabled={kind === "SIMULADO"}
             onChange={(event) => setTotalQuestions(event.target.value)}
             required
             type="number"
@@ -248,20 +317,20 @@ export function GenerateExamPage() {
       <section>
         <div>
           <h2 className="text-lg font-semibold text-slate-950">Selecionar conteúdos</h2>
-          <p className="mt-1 text-sm text-slate-500">Somente os materiais marcados abaixo serão usados para formular as questões.</p>
+          <p className="mt-1 text-sm text-slate-500">Somente os materiais marcados no assunto selecionado serão usados para formular as questões.</p>
         </div>
 
         {isLoading ? (
           <Card className="mt-5 px-5 py-12 text-center text-sm text-slate-500">Carregando conteúdos...</Card>
-        ) : contents.length === 0 ? (
+        ) : availableContents.length === 0 ? (
           <Card className="mt-5 px-6 py-12 text-center">
             <CheckSquare aria-hidden="true" className="mx-auto text-teal-800" size={24} />
-            <h3 className="mt-4 text-base font-semibold text-slate-950">Nenhum conteúdo cadastrado</h3>
-            <p className="mt-2 text-sm text-slate-500">Cadastre conteúdos antes de gerar uma prova.</p>
+            <h3 className="mt-4 text-base font-semibold text-slate-950">Nenhum conteúdo para este assunto</h3>
+            <p className="mt-2 text-sm text-slate-500">Escolha outro assunto ou cadastre um novo material de referência.</p>
           </Card>
         ) : (
           <div className="mt-5 divide-y divide-stone-200 border-y border-stone-200">
-            {contents.map((content) => {
+            {availableContents.map((content) => {
               const selectedIndex = selectedContentIds.indexOf(content.id);
               const isSelected = selectedIndex >= 0;
               const automaticCount = selectedIndex >= 0 ? automaticCounts[selectedIndex] : 0;

@@ -3,9 +3,11 @@ package br.com.provas.services.generation;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 @Service
+@ConditionalOnProperty(prefix = "app.generation.openai", name = "enabled", havingValue = "false", matchIfMissing = true)
 public class LocalContentQuestionGenerationProvider implements QuestionGenerationProvider {
 
     private static final List<String> STATEMENT_TEMPLATES = List.of(

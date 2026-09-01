@@ -19,7 +19,7 @@ public record QuestionRequest(
         @NotBlank(message = "Informe o enunciado da questão.")
         @Size(max = 20000, message = "O enunciado deve ter no máximo 20000 caracteres.")
         String statement,
-        @Size(max = 2048, message = "A URL da imagem deve ter no máximo 2048 caracteres.")
+        @Size(max = 600000, message = "A imagem deve ter no máximo 450 KB.")
         String imageUrl,
         @NotNull(message = "Informe o tipo da questão.")
         QuestionType questionType,

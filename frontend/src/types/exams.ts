@@ -1,5 +1,7 @@
 export type ExamStatus = "DRAFT" | "IN_REVIEW" | "READY" | "VERSIONS_GENERATED" | "APPLIED" | "CORRECTED";
 
+export type ExamKind = "PROVA" | "SIMULADO";
+
 export type ExamVersionStatus = "GENERATED" | "PRINTED" | "APPLIED" | "ARCHIVED";
 
 export type AttendanceStatus = "PRESENT" | "ABSENT";
@@ -27,6 +29,7 @@ export type Exam = {
   examDate: string | null;
   totalScore: number;
   questionCount: number;
+  kind: ExamKind;
   status: ExamStatus;
   contents: ExamContent[];
   questions: ExamQuestion[];
@@ -44,6 +47,7 @@ export type ExamInput = {
   examDate?: string;
   totalScore: number;
   questionIds: string[];
+  kind?: ExamKind;
 };
 
 export type QuestionDistributionMode = "AUTO" | "MANUAL";
@@ -66,6 +70,7 @@ export type GenerateExamInput = {
   difficulty: "EASY" | "MEDIUM" | "HARD" | "MIXED";
   distributionMode: QuestionDistributionMode;
   contents: GenerateExamContentInput[];
+  kind?: ExamKind;
 };
 
 export type ExamPage = {
@@ -153,4 +158,9 @@ export const examStatusLabels: Record<ExamStatus, string> = {
   VERSIONS_GENERATED: "Versões geradas",
   APPLIED: "Aplicada",
   CORRECTED: "Corrigida"
+};
+
+export const examKindLabels: Record<ExamKind, string> = {
+  PROVA: "Prova",
+  SIMULADO: "Simulado"
 };

@@ -52,6 +52,10 @@ public class ExamEntity {
     private int questionCount;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "exam_kind", nullable = false, length = 20, columnDefinition = "VARCHAR(20) DEFAULT 'PROVA'")
+    private ExamKind kind;
+
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private ExamStatus status;
 
@@ -78,6 +82,21 @@ public class ExamEntity {
             LocalDate examDate,
             BigDecimal totalScore,
             int questionCount) {
+        this(teacherId, subjectId, title, classGroup, topic, description, instructions, examDate, totalScore, questionCount, ExamKind.PROVA);
+    }
+
+    public ExamEntity(
+            UUID teacherId,
+            UUID subjectId,
+            String title,
+            String classGroup,
+            String topic,
+            String description,
+            String instructions,
+            LocalDate examDate,
+            BigDecimal totalScore,
+            int questionCount,
+            ExamKind kind) {
         this.id = UUID.randomUUID();
         this.teacherId = teacherId;
         this.subjectId = subjectId;
@@ -89,6 +108,7 @@ public class ExamEntity {
         this.examDate = examDate;
         this.totalScore = totalScore;
         this.questionCount = questionCount;
+        this.kind = kind == null ? ExamKind.PROVA : kind;
         this.status = ExamStatus.DRAFT;
         this.archived = false;
     }
@@ -154,6 +174,10 @@ public class ExamEntity {
         return questionCount;
     }
 
+    public ExamKind getKind() {
+        return kind;
+    }
+
     public ExamStatus getStatus() {
         return status;
     }
@@ -183,7 +207,8 @@ public class ExamEntity {
             String instructions,
             LocalDate examDate,
             BigDecimal totalScore,
-            int questionCount) {
+            int questionCount,
+            ExamKind kind) {
         this.subjectId = subjectId;
         this.title = title;
         this.classGroup = classGroup;
@@ -193,6 +218,7 @@ public class ExamEntity {
         this.examDate = examDate;
         this.totalScore = totalScore;
         this.questionCount = questionCount;
+        this.kind = kind == null ? this.kind : kind;
     }
 
     public void markVersionsGenerated() {

@@ -4,12 +4,14 @@ import { Link } from "react-router-dom";
 
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
+import { ExamCreationModeSwitch } from "../features/exams/ExamCreationModeSwitch";
 import { getContents } from "../services/contentService";
 import { createExam } from "../services/examService";
 import { ApiRequestError } from "../services/httpClient";
 import { getQuestions } from "../services/questionService";
 import { getSubjects } from "../services/subjectService";
 import type { Content, Subject } from "../types/contents";
+import { examKindLabels, type ExamKind } from "../types/exams";
 import { difficultyLabels, type Question } from "../types/questions";
 
 export function CreateExamPage() {
@@ -22,6 +24,7 @@ export function CreateExamPage() {
   const [topic, setTopic] = useState("");
   const [examDate, setExamDate] = useState("");
   const [totalScore, setTotalScore] = useState("10");
+  const [kind, setKind] = useState<ExamKind>("PROVA");
   const [instructions, setInstructions] = useState("");
   const [questionSearch, setQuestionSearch] = useState("");
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
@@ -86,6 +89,10 @@ export function CreateExamPage() {
       setError("Selecione pelo menos uma questão para criar a prova.");
       return;
     }
+    if (kind === "SIMULADO" && selectedQuestionIds.length !== 21) {
+      setError("O simulado precisa ter exatamente 21 questões.");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -97,7 +104,8 @@ export function CreateExamPage() {
         instructions: instructions || undefined,
         examDate: examDate || undefined,
         totalScore: Number(totalScore),
-        questionIds: selectedQuestionIds
+        questionIds: selectedQuestionIds,
+        kind
       });
       setSuccess(`“${createdExam.title}” foi criada como rascunho.`);
       setTitle("");
@@ -125,6 +133,8 @@ export function CreateExamPage() {
         </Button>
       </section>
 
+      <ExamCreationModeSwitch mode="manual" />
+
       {error ? (
         <div aria-live="polite" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
           {error}
@@ -142,6 +152,27 @@ export function CreateExamPage() {
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-5">
           <div className="grid gap-5 sm:grid-cols-2">
+            <fieldset className="sm:col-span-2">
+              <legend className="text-sm font-medium text-slate-700">Formato</legend>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {(["PROVA", "SIMULADO"] as ExamKind[]).map((option) => (
+                  <label
+                    className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm font-medium ${kind === option ? "border-teal-700 bg-teal-50 text-teal-900" : "border-stone-300 bg-white text-slate-700"}`}
+                    key={option}
+                  >
+                    <input
+                      checked={kind === option}
+                      className="h-4 w-4 border-stone-300 text-teal-700 focus:ring-teal-700"
+                      name="exam-kind"
+                      onChange={() => setKind(option)}
+                      type="radio"
+                    />
+                    <span>{option === "SIMULADO" ? "Simulado (21 questões)" : examKindLabels[option]}</span>
+                  </label>
+                ))}
+              </div>
+              {kind === "SIMULADO" ? <p className="mt-2 text-xs leading-5 text-slate-500">Selecione exatamente 21 questões do banco para montar o simulado.</p> : null}
+            </fieldset>
             <label className="block text-sm font-medium text-slate-700" htmlFor="exam-title">
               Título da prova
               <input
@@ -234,6 +265,10 @@ export function CreateExamPage() {
               <dd className="font-semibold text-slate-950">{selectedCount}</dd>
             </div>
             <div className="flex items-center justify-between gap-3 text-slate-600">
+              <dt>Formato</dt>
+              <dd className="font-semibold text-slate-950">{examKindLabels[kind]}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3 text-slate-600">
               <dt>Nota total</dt>
               <dd className="font-semibold text-slate-950">{formatScore(Number(totalScore || 0))}</dd>
             </div>
@@ -242,7 +277,7 @@ export function CreateExamPage() {
               <dd className="font-semibold text-slate-950">{selectedCount ? formatScore(scorePerQuestion) : "-"}</dd>
             </div>
           </dl>
-          <p className="mt-5 text-sm leading-6 text-slate-500">A prova será criada como rascunho. Você poderá revisar antes de gerar versões oficiais.</p>
+          <p className="mt-5 text-sm leading-6 text-slate-500">{kind === "SIMULADO" ? "O simulado será criado com 21 questões em rascunho." : "A prova será criada como rascunho."} Você poderá revisar antes de gerar versões oficiais.</p>
         </aside>
       </section>
 

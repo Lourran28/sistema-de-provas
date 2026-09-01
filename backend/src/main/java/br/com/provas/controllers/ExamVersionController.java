@@ -3,6 +3,10 @@ package br.com.provas.controllers;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -12,6 +16,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import br.com.provas.dtos.versions.ExamVersionResponse;
 import br.com.provas.security.UserPrincipal;
+import br.com.provas.services.ExamExportFormat;
+import br.com.provas.services.ExamVersionExportService;
+import br.com.provas.services.ExportedExamDocument;
 import br.com.provas.services.ExamVersionService;
 
 @RestController
@@ -19,9 +26,13 @@ import br.com.provas.services.ExamVersionService;
 public class ExamVersionController {
 
     private final ExamVersionService examVersionService;
+    private final ExamVersionExportService examVersionExportService;
 
-    public ExamVersionController(ExamVersionService examVersionService) {
+    public ExamVersionController(
+            ExamVersionService examVersionService,
+            ExamVersionExportService examVersionExportService) {
         this.examVersionService = examVersionService;
+        this.examVersionExportService = examVersionExportService;
     }
 
     @GetMapping
@@ -38,6 +49,23 @@ public class ExamVersionController {
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable UUID versionId) {
         return examVersionService.get(principal.id(), versionId);
+    }
+
+    @GetMapping("/{versionId}/export")
+    public ResponseEntity<byte[]> export(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID versionId,
+            @RequestParam String format) {
+        ExportedExamDocument document = examVersionExportService.export(
+                principal,
+                versionId,
+                ExamExportFormat.from(format));
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(document.mediaType()))
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(document.filename()).build().toString())
+                .body(document.content());
     }
 
 }

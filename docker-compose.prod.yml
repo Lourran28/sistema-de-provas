@@ -26,6 +26,10 @@ services:
       JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET no .env.production}
       JWT_ISSUER: ${JWT_ISSUER:-provas-api}
       JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-480}
+      OPENAI_ENABLED: ${OPENAI_ENABLED:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6-luna}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1/responses}
     depends_on:
       postgres:
         condition: service_healthy
@@ -36,6 +40,8 @@ services:
       args:
         VITE_API_URL: /api
     restart: unless-stopped
+    environment:
+      BACKEND_URL: http://backend:8080
     ports:
       - "${APP_PORT:-8088}:80"
     depends_on:

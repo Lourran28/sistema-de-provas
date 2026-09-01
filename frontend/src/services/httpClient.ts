@@ -78,6 +78,30 @@ export function apiDelete<TResponse = void>(path: string) {
   return apiRequest<TResponse>(path, { method: "DELETE" });
 }
 
+export async function apiDownload(path: string, fallbackFilename: string) {
+  const headers = new Headers({ Accept: "application/octet-stream" });
+  const accessToken = getAccessToken();
+  if (accessToken) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+
+  const response = await fetch(`${API_URL}${path}`, { headers });
+  if (!response.ok) {
+    const error = await readApiError(response);
+    throw new ApiRequestError(response.status, error.message, error.fieldErrors);
+  }
+
+  const blob = await response.blob();
+  const link = document.createElement("a");
+  const objectUrl = URL.createObjectURL(blob);
+  link.href = objectUrl;
+  link.download = downloadFilename(response.headers.get("Content-Disposition"), fallbackFilename);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
 async function readApiError(response: Response): Promise<Required<ApiErrorPayload>> {
   try {
     const payload = (await response.json()) as ApiErrorPayload;
@@ -91,4 +115,13 @@ async function readApiError(response: Response): Promise<Required<ApiErrorPayloa
       fieldErrors: {}
     };
   }
+}
+
+function downloadFilename(contentDisposition: string | null, fallbackFilename: string) {
+  const encodedMatch = contentDisposition?.match(/filename\*=UTF-8''([^;]+)/i);
+  if (encodedMatch?.[1]) {
+    return decodeURIComponent(encodedMatch[1]);
+  }
+  const filenameMatch = contentDisposition?.match(/filename="?([^";]+)"?/i);
+  return filenameMatch?.[1] ?? fallbackFilename;
 }

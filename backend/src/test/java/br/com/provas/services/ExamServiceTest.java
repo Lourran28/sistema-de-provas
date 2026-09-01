@@ -27,6 +27,7 @@ import br.com.provas.dtos.exams.GenerateExamRequest;
 import br.com.provas.dtos.exams.GeneratedExamContentRequest;
 import br.com.provas.entities.ContentEntity;
 import br.com.provas.entities.ExamEntity;
+import br.com.provas.entities.ExamKind;
 import br.com.provas.entities.ExamQuestionEntity;
 import br.com.provas.entities.QuestionDifficulty;
 import br.com.provas.entities.QuestionDistributionMode;
@@ -81,6 +82,18 @@ class ExamServiceTest {
                 UUID.randomUUID(),
                 request(List.of(repeatedQuestionId, repeatedQuestionId))));
 
+        verify(examRepository, never()).save(any());
+    }
+
+    @Test
+    void rejectsSimuladoWithoutExactlyTwentyOneQuestionsBeforeLoadingQuestions() {
+        List<UUID> questionIds = List.of(UUID.randomUUID(), UUID.randomUUID());
+
+        assertThrows(IllegalArgumentException.class, () -> examService.create(
+                UUID.randomUUID(),
+                request(questionIds, ExamKind.SIMULADO)));
+
+        verify(questionService, never()).findEntities(any(), any());
         verify(examRepository, never()).save(any());
     }
 
@@ -281,6 +294,10 @@ class ExamServiceTest {
     }
 
     private ExamRequest request(List<UUID> questionIds) {
+        return request(questionIds, ExamKind.PROVA);
+    }
+
+    private ExamRequest request(List<UUID> questionIds, ExamKind kind) {
         return new ExamRequest(
                 null,
                 "Avaliação de revisão",
@@ -290,7 +307,8 @@ class ExamServiceTest {
                 null,
                 null,
                 new BigDecimal("10.00"),
-                questionIds);
+                questionIds,
+                kind);
     }
 
     private GenerateExamRequest generatedRequest(UUID contentId, int totalQuestions, QuestionDistributionMode distributionMode) {

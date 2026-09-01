@@ -1,5 +1,5 @@
 import type { Exam, ExamClearResult, ExamInput, ExamPage, ExamVersion, GenerateExamInput } from "../types/exams";
-import { apiDelete, apiGet, apiPatch, apiPost } from "./httpClient";
+import { apiDelete, apiDownload, apiGet, apiPatch, apiPost } from "./httpClient";
 
 export function getExams(page = 0, size = 12) {
   return apiGet<ExamPage>(`/exams?page=${page}&size=${size}`);
@@ -51,4 +51,12 @@ export function getExamVersions(examId?: string) {
 
 export function getExamVersion(versionId: string) {
   return apiGet<ExamVersion>(`/exam-versions/${versionId}`);
+}
+
+export function downloadExamVersion(versionId: string, format: "pdf" | "docx") {
+  const extension = format === "pdf" ? "pdf" : "docx";
+  return apiDownload(
+    `/exam-versions/${versionId}/export?format=${format}`,
+    `prova-versao.${extension}`
+  );
 }

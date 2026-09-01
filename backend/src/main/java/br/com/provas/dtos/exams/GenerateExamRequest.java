@@ -16,6 +16,7 @@ import jakarta.validation.constraints.Size;
 
 import br.com.provas.entities.QuestionDifficulty;
 import br.com.provas.entities.QuestionDistributionMode;
+import br.com.provas.entities.ExamKind;
 
 public record GenerateExamRequest(
         UUID subjectId,
@@ -44,5 +45,22 @@ public record GenerateExamRequest(
         QuestionDistributionMode distributionMode,
         @NotEmpty(message = "Selecione pelo menos um conteúdo.")
         @Size(max = 20, message = "Selecione no máximo 20 conteúdos por geração.")
-        List<@Valid GeneratedExamContentRequest> contents) {
+        List<@Valid GeneratedExamContentRequest> contents,
+        ExamKind kind) {
+
+    public GenerateExamRequest(
+            UUID subjectId,
+            String title,
+            String classGroup,
+            String topic,
+            String description,
+            String instructions,
+            LocalDate examDate,
+            BigDecimal totalScore,
+            Integer totalQuestions,
+            QuestionDifficulty difficulty,
+            QuestionDistributionMode distributionMode,
+            List<GeneratedExamContentRequest> contents) {
+        this(subjectId, title, classGroup, topic, description, instructions, examDate, totalScore, totalQuestions, difficulty, distributionMode, contents, ExamKind.PROVA);
+    }
 }

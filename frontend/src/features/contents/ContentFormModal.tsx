@@ -11,9 +11,10 @@ type ContentFormModalProps = {
   onClose: () => void;
   onSave: (input: ContentInput) => Promise<void>;
   subjects: Subject[];
+  topics: string[];
 };
 
-export function ContentFormModal({ content, onClose, onSave, subjects }: ContentFormModalProps) {
+export function ContentFormModal({ content, onClose, onSave, subjects, topics }: ContentFormModalProps) {
   const [subjectId, setSubjectId] = useState(content?.subjectId ?? "");
   const [title, setTitle] = useState(content?.title ?? "");
   const [topic, setTopic] = useState(content?.topic ?? "");
@@ -90,11 +91,16 @@ export function ContentFormModal({ content, onClose, onSave, subjects }: Content
               <input
                 className="mt-2 h-11 w-full rounded-lg border border-stone-300 px-3 text-slate-950 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
                 id="content-topic"
+                list="content-topic-options"
                 maxLength={160}
                 onChange={(event) => setTopic(event.target.value)}
+                placeholder="Selecione ou digite um assunto"
                 required
                 value={topic}
               />
+              <datalist id="content-topic-options">
+                {topics.map((option) => <option key={option} value={option} />)}
+              </datalist>
             </label>
 
             <label className="block text-sm font-medium text-slate-700" htmlFor="content-theme">
