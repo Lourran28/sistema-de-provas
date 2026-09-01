@@ -5,12 +5,16 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
+import jakarta.persistence.criteria.Predicate;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -64,13 +68,24 @@ public class QuestionService {
 
     @Transactional(readOnly = true)
     public QuestionPageResponse list(UUID teacherId, String search, UUID subjectId, QuestionDifficulty difficulty, Pageable pageable) {
-        Page<QuestionEntity> page = questionRepository.findPageByTeacherId(
-                teacherId,
-                normalizeOptional(search),
-                subjectId,
-                difficulty,
-                QuestionStatus.ACTIVE,
-                pageable);
+        String normalizedSearch = normalizeOptional(search);
+        Specification<QuestionEntity> filters = (root, query, builder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(builder.equal(root.get("teacherId"), teacherId));
+            predicates.add(builder.equal(root.get("status"), QuestionStatus.ACTIVE));
+            if (normalizedSearch != null) {
+                String pattern = "%" + normalizedSearch.toLowerCase(Locale.ROOT) + "%";
+                predicates.add(builder.like(builder.lower(root.get("statement")), pattern));
+            }
+            if (subjectId != null) {
+                predicates.add(builder.equal(root.get("subjectId"), subjectId));
+            }
+            if (difficulty != null) {
+                predicates.add(builder.equal(root.get("difficulty"), difficulty));
+            }
+            return builder.and(predicates.toArray(Predicate[]::new));
+        };
+        Page<QuestionEntity> page = questionRepository.findAll(filters, pageable);
         List<QuestionEntity> questions = page.getContent();
         Map<UUID, List<UUID>> contentIdsByQuestion = findContentIdsByQuestion(questions);
         Map<UUID, List<AlternativeEntity>> alternativesByQuestion = findAlternativesByQuestion(questions);

@@ -1,10 +1,15 @@
 package br.com.provas.services;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
+
+import jakarta.persistence.criteria.Predicate;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,12 +33,27 @@ public class ContentService {
 
     @Transactional(readOnly = true)
     public ContentPageResponse list(UUID teacherId, String search, UUID subjectId, String topic, Pageable pageable) {
-        Page<ContentEntity> contents = contentRepository.findPageByTeacherId(
-                teacherId,
-                normalizeOptional(search),
-                subjectId,
-                normalizeOptional(topic),
-                pageable);
+        String normalizedSearch = normalizeOptional(search);
+        String normalizedTopic = normalizeOptional(topic);
+        Specification<ContentEntity> filters = (root, query, builder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(builder.equal(root.get("teacherId"), teacherId));
+            if (normalizedSearch != null) {
+                String pattern = "%" + normalizedSearch.toLowerCase(Locale.ROOT) + "%";
+                predicates.add(builder.or(
+                        builder.like(builder.lower(root.get("title")), pattern),
+                        builder.like(builder.lower(root.get("topic")), pattern),
+                        builder.like(builder.lower(root.get("theme")), pattern)));
+            }
+            if (subjectId != null) {
+                predicates.add(builder.equal(root.get("subjectId"), subjectId));
+            }
+            if (normalizedTopic != null) {
+                predicates.add(builder.equal(builder.lower(root.get("topic")), normalizedTopic.toLowerCase(Locale.ROOT)));
+            }
+            return builder.and(predicates.toArray(Predicate[]::new));
+        };
+        Page<ContentEntity> contents = contentRepository.findAll(filters, pageable);
         return ContentPageResponse.from(contents);
     }
 
