@@ -10,6 +10,7 @@ import { difficultyLabels, type Question, type QuestionDifficulty, type Question
 type QuestionFormModalProps = {
   contents: Content[];
   onClose: () => void;
+  onCreateSubject: (name: string) => Promise<Subject>;
   onSave: (input: QuestionInput) => Promise<void>;
   question?: Question;
   subjects: Subject[];
@@ -19,9 +20,9 @@ const emptyAlternatives = [{ text: "" }, { text: "" }];
 const MAX_INPUT_IMAGE_SIZE = 8 * 1024 * 1024;
 const MAX_STORED_IMAGE_LENGTH = 600000;
 
-export function QuestionFormModal({ contents, onClose, onSave, question, subjects }: QuestionFormModalProps) {
+export function QuestionFormModal({ contents, onClose, onCreateSubject, onSave, question, subjects }: QuestionFormModalProps) {
   const initialContentId = question?.contentIds[0] ?? "";
-  const [subjectId, setSubjectId] = useState(question?.subjectId ?? "");
+  const [subjectName, setSubjectName] = useState(() => subjects.find((subject) => subject.id === question?.subjectId)?.name ?? "");
   const [contentId, setContentId] = useState(initialContentId);
   const [statement, setStatement] = useState(question?.statement ?? "");
   const [imageUrl, setImageUrl] = useState(question?.imageUrl ?? "");
@@ -43,7 +44,7 @@ export function QuestionFormModal({ contents, onClose, onSave, question, subject
     setContentId(nextContentId);
     const selectedContent = contents.find((content) => content.id === nextContentId);
     if (selectedContent?.subjectId) {
-      setSubjectId(selectedContent.subjectId);
+      setSubjectName(subjects.find((subject) => subject.id === selectedContent.subjectId)?.name ?? "");
     }
   }
 
@@ -97,8 +98,11 @@ export function QuestionFormModal({ contents, onClose, onSave, question, subject
     setIsSubmitting(true);
 
     try {
+      const normalizedSubjectName = subjectName.trim();
+      const existingSubject = subjects.find((subject) => subject.name.localeCompare(normalizedSubjectName, "pt-BR", { sensitivity: "accent" }) === 0);
+      const subjectId = normalizedSubjectName ? (existingSubject ?? await onCreateSubject(normalizedSubjectName)).id : undefined;
       await onSave({
-        subjectId: subjectId || undefined,
+        subjectId,
         contentId: contentId || undefined,
         statement,
         imageUrl: imageUrl.trim() || undefined,
@@ -128,19 +132,21 @@ export function QuestionFormModal({ contents, onClose, onSave, question, subject
           <div className="grid gap-5 sm:grid-cols-2">
             <label className="block text-sm font-medium text-slate-700" htmlFor="question-subject">
               Disciplina
-              <select
-                className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-800 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
+              <input
+                className="mt-2 h-11 w-full rounded-lg border border-stone-300 px-3 text-slate-950 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
                 id="question-subject"
-                onChange={(event) => setSubjectId(event.target.value)}
-                value={subjectId}
-              >
-                <option value="">Sem disciplina</option>
+                list="question-subject-options"
+                maxLength={120}
+                onChange={(event) => setSubjectName(event.target.value)}
+                placeholder="Digite ou selecione uma disciplina"
+                value={subjectName}
+              />
+              <datalist id="question-subject-options">
                 {subjects.map((subject) => (
-                  <option key={subject.id} value={subject.id}>
-                    {subject.name}
-                  </option>
+                  <option key={subject.id} value={subject.name} />
                 ))}
-              </select>
+              </datalist>
+              <span className="mt-1 block text-xs font-normal text-slate-500">Uma disciplina nova será criada ao salvar.</span>
             </label>
 
             <label className="block text-sm font-medium text-slate-700" htmlFor="question-content">

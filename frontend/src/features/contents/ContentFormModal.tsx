@@ -9,13 +9,14 @@ import type { Content, ContentInput, Subject } from "../../types/contents";
 type ContentFormModalProps = {
   content?: Content;
   onClose: () => void;
+  onCreateSubject: (name: string) => Promise<Subject>;
   onSave: (input: ContentInput) => Promise<void>;
   subjects: Subject[];
   topics: string[];
 };
 
-export function ContentFormModal({ content, onClose, onSave, subjects, topics }: ContentFormModalProps) {
-  const [subjectId, setSubjectId] = useState(content?.subjectId ?? "");
+export function ContentFormModal({ content, onClose, onCreateSubject, onSave, subjects, topics }: ContentFormModalProps) {
+  const [subjectName, setSubjectName] = useState(() => subjects.find((subject) => subject.id === content?.subjectId)?.name ?? "");
   const [title, setTitle] = useState(content?.title ?? "");
   const [topic, setTopic] = useState(content?.topic ?? "");
   const [theme, setTheme] = useState(content?.theme ?? "");
@@ -30,8 +31,11 @@ export function ContentFormModal({ content, onClose, onSave, subjects, topics }:
     setIsSubmitting(true);
 
     try {
+      const normalizedSubjectName = subjectName.trim();
+      const existingSubject = subjects.find((subject) => subject.name.localeCompare(normalizedSubjectName, "pt-BR", { sensitivity: "accent" }) === 0);
+      const subjectId = normalizedSubjectName ? (existingSubject ?? await onCreateSubject(normalizedSubjectName)).id : undefined;
       await onSave({
-        subjectId: subjectId || undefined,
+        subjectId,
         title,
         topic,
         theme: theme || undefined,
@@ -71,19 +75,21 @@ export function ContentFormModal({ content, onClose, onSave, subjects, topics }:
 
             <label className="block text-sm font-medium text-slate-700" htmlFor="content-subject">
               Disciplina
-              <select
-                className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-800 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
+              <input
+                className="mt-2 h-11 w-full rounded-lg border border-stone-300 px-3 text-slate-950 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
                 id="content-subject"
-                onChange={(event) => setSubjectId(event.target.value)}
-                value={subjectId}
-              >
-                <option value="">Sem disciplina</option>
+                list="content-subject-options"
+                maxLength={120}
+                onChange={(event) => setSubjectName(event.target.value)}
+                placeholder="Digite ou selecione uma disciplina"
+                value={subjectName}
+              />
+              <datalist id="content-subject-options">
                 {subjects.map((subject) => (
-                  <option key={subject.id} value={subject.id}>
-                    {subject.name}
-                  </option>
+                  <option key={subject.id} value={subject.name} />
                 ))}
-              </select>
+              </datalist>
+              <span className="mt-1 block text-xs font-normal text-slate-500">Uma disciplina nova será criada ao salvar.</span>
             </label>
 
             <label className="block text-sm font-medium text-slate-700" htmlFor="content-topic">

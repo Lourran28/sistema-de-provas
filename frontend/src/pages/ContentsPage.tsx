@@ -7,7 +7,7 @@ import { useConfirmation } from "../components/ui/confirmationContext";
 import { ContentFormModal } from "../features/contents/ContentFormModal";
 import { SubjectManagerModal } from "../features/contents/SubjectManagerModal";
 import { getContentTopics, getContents, createContent, deleteContent, updateContent } from "../services/contentService";
-import { getSubjects } from "../services/subjectService";
+import { createSubject, getSubjects } from "../services/subjectService";
 import { ApiRequestError } from "../services/httpClient";
 import type { Content, ContentFilters, ContentInput, ContentPage, Subject } from "../types/contents";
 
@@ -93,6 +93,12 @@ export function ContentsPage() {
       await createContent(input);
     }
     await loadContents();
+  }
+
+  async function createAndSelectSubject(name: string) {
+    const subject = await createSubject({ name, description: "" });
+    setSubjects((current) => [...current, subject].sort((first, second) => first.name.localeCompare(second.name, "pt-BR")));
+    return subject;
   }
 
   async function removeContent(content: Content) {
@@ -242,6 +248,7 @@ export function ContentsPage() {
         <ContentFormModal
           content={editingContent}
           onClose={() => setIsContentModalOpen(false)}
+          onCreateSubject={createAndSelectSubject}
           onSave={saveContent}
           subjects={subjects}
           topics={topics}

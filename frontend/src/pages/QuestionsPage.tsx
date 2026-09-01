@@ -10,7 +10,7 @@ import { getContents } from "../services/contentService";
 import { ApiRequestError } from "../services/httpClient";
 import { clearQuestions, createQuestion, deleteQuestion, getQuestions, updateQuestion } from "../services/questionService";
 import { ModalDialog } from "../components/ui/ModalDialog";
-import { getSubjects } from "../services/subjectService";
+import { createSubject, getSubjects } from "../services/subjectService";
 import type { Content, Subject } from "../types/contents";
 import { difficultyLabels, type Question, type QuestionDifficulty, type QuestionFilters, type QuestionInput, type QuestionPage } from "../types/questions";
 
@@ -93,6 +93,12 @@ export function QuestionsPage() {
       await createQuestion(input);
     }
     await loadQuestions();
+  }
+
+  async function createAndSelectSubject(name: string) {
+    const subject = await createSubject({ name, description: "" });
+    setSubjects((current) => [...current, subject].sort((first, second) => first.name.localeCompare(second.name, "pt-BR")));
+    return subject;
   }
 
   async function removeQuestion(question: Question) {
@@ -275,6 +281,7 @@ export function QuestionsPage() {
         <QuestionFormModal
           contents={contents}
           onClose={() => setIsQuestionModalOpen(false)}
+          onCreateSubject={createAndSelectSubject}
           onSave={saveQuestion}
           question={editingQuestion}
           subjects={subjects}
