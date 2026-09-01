@@ -9,21 +9,21 @@ import type {
 import { apiGet, apiPatch, apiPost } from "./httpClient";
 
 export function login(credentials: LoginCredentials) {
-  return apiPost<AuthenticationResponse>("/api/auth/login", credentials);
+  return apiPost<AuthenticationResponse>("/auth/login", credentials);
 }
 
 export function loginDemo() {
-  return apiPost<AuthenticationResponse>("/api/auth/demo", {});
+  return apiPost<AuthenticationResponse>("/auth/demo", {});
 }
 
 export function register(data: RegistrationData) {
-  return apiPost<AuthenticationResponse>("/api/auth/register", data);
+  return apiPost<AuthenticationResponse>("/auth/register", data);
 }
 
 export function getCurrentUser() {
-  return apiGet<AuthenticatedUser>("/api/auth/me");
+  return apiGet<AuthenticatedUser>("/auth/me");
 }
 
 export function updateProfile(input: ProfileUpdateInput) {
-  return apiPatch<AuthenticatedUser>("/api/auth/me", input);
+  return apiPatch<AuthenticatedUser>("/auth/me", input);
 }

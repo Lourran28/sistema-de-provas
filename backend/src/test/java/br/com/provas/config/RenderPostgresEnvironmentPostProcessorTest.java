@@ -20,4 +20,18 @@ class RenderPostgresEnvironmentPostProcessorTest {
         assertThat(environment.getProperty("spring.datasource.username")).isEqualTo("teacher");
         assertThat(environment.getProperty("spring.datasource.password")).isEqualTo("secure@pass");
     }
+
+    @Test
+    void movesCredentialsOutOfJdbcUrl() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty("DATABASE_URL",
+                "jdbc:postgresql://db.internal:5432/provas?user=teacher&password=secure%40pass&sslmode=require");
+
+        new RenderPostgresEnvironmentPostProcessor().postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("spring.datasource.url"))
+                .isEqualTo("jdbc:postgresql://db.internal:5432/provas?sslmode=require");
+        assertThat(environment.getProperty("spring.datasource.username")).isEqualTo("teacher");
+        assertThat(environment.getProperty("spring.datasource.password")).isEqualTo("secure@pass");
+    }
 }

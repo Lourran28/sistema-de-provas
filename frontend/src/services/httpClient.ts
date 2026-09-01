@@ -1,10 +1,15 @@
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8080/api";
+const API_URL = normalizeApiUrl(import.meta.env.VITE_API_URL ?? "http://localhost:8080/api");
 const ACCESS_TOKEN_STORAGE_KEY = "provas.access-token";
 
 type ApiErrorPayload = {
   message?: string;
   fieldErrors?: Record<string, string>;
 };
+
+function normalizeApiUrl(value: string) {
+  const baseUrl = value.trim().replace(/\/+$/, "");
+  return baseUrl.endsWith("/api") ? baseUrl : `${baseUrl}/api`;
+}
 
 export class ApiRequestError extends Error {
   readonly fieldErrors: Record<string, string>;
