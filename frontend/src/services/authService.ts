@@ -1,6 +1,7 @@
 import type {
   AuthenticatedUser,
   AuthenticationResponse,
+  ChangePasswordInput,
   LoginCredentials,
   ProfileUpdateInput,
   RegistrationData,
@@ -26,4 +27,8 @@ export function getCurrentUser() {
 
 export function updateProfile(input: ProfileUpdateInput) {
   return apiPatch<AuthenticatedUser>("/auth/me", input);
+}
+
+export function changePassword(input: ChangePasswordInput) {
+  return apiPatch<void>("/auth/me/password", input);
 }

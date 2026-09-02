@@ -90,4 +90,8 @@ public class UserEntity {
         this.name = name;
         this.email = email;
     }
+
+    public void changePassword(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
 }

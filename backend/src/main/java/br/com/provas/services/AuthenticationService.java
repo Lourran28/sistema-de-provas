@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import br.com.provas.dtos.auth.AuthResponse;
+import br.com.provas.dtos.auth.ChangePasswordRequest;
 import br.com.provas.dtos.auth.LoginRequest;
 import br.com.provas.dtos.auth.RegisterRequest;
 import br.com.provas.dtos.auth.UpdateProfileRequest;
@@ -100,6 +101,23 @@ public class AuthenticationService {
                 });
         user.updateProfile(normalizeName(request.name()), email);
         return UserProfileResponse.from(user);
+    }
+
+    @Transactional
+    public void changePassword(UUID userId, ChangePasswordRequest request) {
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> new BadCredentialsException("Sessão não encontrada."));
+        validatePasswordByteLength(request.currentPassword());
+        validatePasswordByteLength(request.newPassword());
+
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("A senha atual está incorreta.");
+        }
+        if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("A nova senha deve ser diferente da senha atual.");
+        }
+
+        user.changePassword(passwordEncoder.encode(request.newPassword()));
     }
 
     private AuthResponse createAuthResponse(UserEntity user) {

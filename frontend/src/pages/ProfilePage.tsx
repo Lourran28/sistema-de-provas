@@ -1,9 +1,11 @@
-import { CheckCircle2, LogOut, Pencil, Save, ShieldCheck, UserRound, X } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, KeyRound, LogOut, Pencil, Save, ShieldCheck, UserRound, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
+import { ModalDialog } from "../components/ui/ModalDialog";
 import { useAuth } from "../features/auth/useAuth";
+import { changePassword } from "../services/authService";
 import { ApiRequestError } from "../services/httpClient";
 
 export function ProfilePage() {
@@ -14,6 +16,7 @@ export function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
   if (!user) {
     return null;
@@ -98,11 +101,125 @@ export function ProfilePage() {
           </dl>
         )}
 
-        <div className="border-t border-stone-200 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-200 px-5 py-4">
+          <Button icon={KeyRound} onClick={() => { setError(""); setNotice(""); setIsPasswordModalOpen(true); }} variant="secondary">Alterar senha</Button>
           <Button icon={LogOut} onClick={signOut} variant="ghost">Sair da conta</Button>
         </div>
       </Card>
+
+      {isPasswordModalOpen ? (
+        <ChangePasswordModal
+          onClose={() => setIsPasswordModalOpen(false)}
+          onSuccess={() => {
+            setIsPasswordModalOpen(false);
+            setNotice("Senha alterada com sucesso.");
+          }}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function ChangePasswordModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+
+    if (newPassword !== confirmation) {
+      setError("A nova senha e a confirmação precisam ser iguais.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await changePassword({ currentPassword, newPassword });
+      onSuccess();
+    } catch (requestError) {
+      setError(requestError instanceof ApiRequestError ? requestError.message : "Não foi possível alterar a senha.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <ModalDialog onClose={isSaving ? () => undefined : onClose} size="lg" title="Alterar senha">
+      <form className="space-y-5 px-5 py-5 sm:px-6" onSubmit={handleSubmit}>
+        {error ? <div aria-live="polite" className="border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" role="alert">{error}</div> : null}
+
+        <PasswordField
+          autoComplete="current-password"
+          id="current-password"
+          label="Senha atual"
+          onChange={setCurrentPassword}
+          value={currentPassword}
+          visible={isPasswordVisible}
+        />
+        <PasswordField
+          autoComplete="new-password"
+          id="new-password"
+          label="Nova senha"
+          onChange={setNewPassword}
+          value={newPassword}
+          visible={isPasswordVisible}
+        />
+        <PasswordField
+          autoComplete="new-password"
+          id="confirm-password"
+          label="Confirmar nova senha"
+          onChange={setConfirmation}
+          value={confirmation}
+          visible={isPasswordVisible}
+        />
+
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+          <input checked={isPasswordVisible} className="h-4 w-4 accent-teal-700" onChange={(event) => setIsPasswordVisible(event.target.checked)} type="checkbox" />
+          Mostrar senhas
+        </label>
+
+        <div className="flex flex-wrap justify-end gap-3 border-t border-stone-200 pt-5">
+          <Button disabled={isSaving} onClick={onClose} variant="secondary">Cancelar</Button>
+          <Button disabled={isSaving} icon={Save} type="submit">{isSaving ? "Alterando..." : "Salvar nova senha"}</Button>
+        </div>
+      </form>
+    </ModalDialog>
+  );
+}
+
+function PasswordField({ autoComplete, id, label, onChange, value, visible }: {
+  autoComplete: string;
+  id: string;
+  label: string;
+  onChange: (value: string) => void;
+  value: string;
+  visible: boolean;
+}) {
+  const VisibilityIcon = visible ? EyeOff : Eye;
+
+  return (
+    <label className="block text-sm font-medium text-slate-700" htmlFor={id}>
+      {label}
+      <span className="relative mt-2 block">
+        <input
+          autoComplete={autoComplete}
+          className="h-11 w-full rounded-lg border border-stone-300 bg-white px-3 pr-11 font-normal text-slate-950 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
+          id={id}
+          maxLength={72}
+          minLength={8}
+          onChange={(event) => onChange(event.target.value)}
+          required
+          type={visible ? "text" : "password"}
+          value={value}
+        />
+        <VisibilityIcon aria-hidden="true" className="pointer-events-none absolute right-3 top-3 text-slate-400" size={19} />
+      </span>
+    </label>
   );
 }
 

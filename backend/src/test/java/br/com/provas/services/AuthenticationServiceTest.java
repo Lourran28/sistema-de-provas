@@ -20,6 +20,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import br.com.provas.dtos.auth.AuthResponse;
+import br.com.provas.dtos.auth.ChangePasswordRequest;
 import br.com.provas.dtos.auth.LoginRequest;
 import br.com.provas.dtos.auth.RegisterRequest;
 import br.com.provas.dtos.auth.UpdateProfileRequest;
@@ -126,5 +127,36 @@ class AuthenticationServiceTest {
         assertThrows(
                 ConflictException.class,
                 () -> authenticationService.updateProfile(user.getId(), new UpdateProfileRequest("Ana", "bia@escola.com")));
+    }
+
+    @Test
+    void changesPasswordWhenCurrentPasswordIsValid() {
+        UserEntity user = new UserEntity("Ana", "ana@escola.com", "hash-atual", UserRole.TEACHER);
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("senha-atual", "hash-atual")).thenReturn(true);
+        when(passwordEncoder.matches("senha-nova", "hash-atual")).thenReturn(false);
+        when(passwordEncoder.encode("senha-nova")).thenReturn("hash-novo");
+
+        authenticationService.changePassword(
+                user.getId(),
+                new ChangePasswordRequest("senha-atual", "senha-nova"));
+
+        assertEquals("hash-novo", user.getPasswordHash());
+    }
+
+    @Test
+    void rejectsPasswordChangeWhenCurrentPasswordIsWrong() {
+        UserEntity user = new UserEntity("Ana", "ana@escola.com", "hash-atual", UserRole.TEACHER);
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("senha-errada", "hash-atual")).thenReturn(false);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> authenticationService.changePassword(
+                        user.getId(),
+                        new ChangePasswordRequest("senha-errada", "senha-nova")));
+
+        assertEquals("A senha atual está incorreta.", exception.getMessage());
+        assertEquals("hash-atual", user.getPasswordHash());
     }
 }

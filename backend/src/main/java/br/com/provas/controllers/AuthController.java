@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import br.com.provas.dtos.auth.AuthResponse;
+import br.com.provas.dtos.auth.ChangePasswordRequest;
 import br.com.provas.dtos.auth.LoginRequest;
 import br.com.provas.dtos.auth.RegisterRequest;
 import br.com.provas.dtos.auth.UserProfileResponse;
@@ -50,5 +51,13 @@ public class AuthController {
             @AuthenticationPrincipal UserPrincipal principal,
             @Valid @RequestBody UpdateProfileRequest request) {
         return authenticationService.updateProfile(principal.id(), request);
+    }
+
+    @PatchMapping("/me/password")
+    public ResponseEntity<Void> changePassword(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @RequestBody ChangePasswordRequest request) {
+        authenticationService.changePassword(principal.id(), request);
+        return ResponseEntity.noContent().build();
     }
 }
