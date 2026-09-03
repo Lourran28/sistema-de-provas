@@ -23,6 +23,7 @@ import br.com.provas.config.SecurityConfig;
 import br.com.provas.security.JwtService;
 import br.com.provas.security.UserPrincipalService;
 import br.com.provas.services.AuthenticationService;
+import br.com.provas.services.PasswordResetService;
 
 @WebMvcTest({ HealthController.class, AuthController.class })
 @Import({ SecurityConfig.class, HealthControllerTest.TestSecurityDependencies.class })
@@ -48,6 +49,19 @@ class HealthControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void passwordResetEndpointsArePublic() throws Exception {
+        mockMvc.perform(post("/api/auth/password/forgot")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"professor@escola.com\"}"))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(post("/api/auth/password/reset")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"token\":\"token-valido\",\"newPassword\":\"senha-nova\"}"))
+                .andExpect(status().isNoContent());
     }
 
     @Test
@@ -85,6 +99,11 @@ class HealthControllerTest {
         @Bean
         AuthenticationService authenticationService() {
             return Mockito.mock(AuthenticationService.class);
+        }
+
+        @Bean
+        PasswordResetService passwordResetService() {
+            return Mockito.mock(PasswordResetService.class);
         }
     }
 }

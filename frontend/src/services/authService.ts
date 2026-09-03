@@ -2,9 +2,11 @@ import type {
   AuthenticatedUser,
   AuthenticationResponse,
   ChangePasswordInput,
+  ForgotPasswordInput,
   LoginCredentials,
   ProfileUpdateInput,
   RegistrationData,
+  ResetPasswordInput,
 } from "../types/auth";
 
 import { apiGet, apiPatch, apiPost } from "./httpClient";
@@ -31,4 +33,12 @@ export function updateProfile(input: ProfileUpdateInput) {
 
 export function changePassword(input: ChangePasswordInput) {
   return apiPatch<void>("/auth/me/password", input);
+}
+
+export function requestPasswordReset(input: ForgotPasswordInput) {
+  return apiPost<void>("/auth/password/forgot", input);
+}
+
+export function resetPassword(input: ResetPasswordInput) {
+  return apiPost<void>("/auth/password/reset", input);
 }

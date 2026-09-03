@@ -112,6 +112,14 @@ export function LoginPage() {
                 {isPasswordVisible ? <EyeOff aria-hidden="true" size={19} /> : <Eye aria-hidden="true" size={19} />}
               </button>
             </div>
+            <div className="mt-2 text-right">
+              <Link
+                className="font-semibold text-teal-800 underline decoration-teal-300 underline-offset-4 hover:text-teal-950"
+                to="/esqueci-senha"
+              >
+                Esqueci minha senha
+              </Link>
+            </div>
           </div>
 
           <Button className="w-full" disabled={isSubmitting} icon={ArrowRight} type="submit">

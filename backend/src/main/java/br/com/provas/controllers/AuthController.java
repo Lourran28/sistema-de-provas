@@ -15,20 +15,27 @@ import org.springframework.web.bind.annotation.RestController;
 import br.com.provas.dtos.auth.AuthResponse;
 import br.com.provas.dtos.auth.ChangePasswordRequest;
 import br.com.provas.dtos.auth.LoginRequest;
+import br.com.provas.dtos.auth.ForgotPasswordRequest;
 import br.com.provas.dtos.auth.RegisterRequest;
+import br.com.provas.dtos.auth.ResetPasswordRequest;
 import br.com.provas.dtos.auth.UserProfileResponse;
 import br.com.provas.dtos.auth.UpdateProfileRequest;
 import br.com.provas.security.UserPrincipal;
 import br.com.provas.services.AuthenticationService;
+import br.com.provas.services.PasswordResetService;
 
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
 
     private final AuthenticationService authenticationService;
+    private final PasswordResetService passwordResetService;
 
-    public AuthController(AuthenticationService authenticationService) {
+    public AuthController(
+            AuthenticationService authenticationService,
+            PasswordResetService passwordResetService) {
         this.authenticationService = authenticationService;
+        this.passwordResetService = passwordResetService;
     }
 
     @PostMapping("/register")
@@ -39,6 +46,18 @@ public class AuthController {
     @PostMapping("/login")
     public AuthResponse login(@Valid @RequestBody LoginRequest request) {
         return authenticationService.login(request);
+    }
+
+    @PostMapping("/password/forgot")
+    public ResponseEntity<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        passwordResetService.requestReset(request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/password/reset")
+    public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        passwordResetService.resetPassword(request);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/me")
