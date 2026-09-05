@@ -23,6 +23,7 @@ import br.com.provas.dtos.auth.UpdateProfileRequest;
 import br.com.provas.security.UserPrincipal;
 import br.com.provas.services.AuthenticationService;
 import br.com.provas.services.PasswordResetService;
+import br.com.provas.services.PasswordResetRequestService;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -30,12 +31,15 @@ public class AuthController {
 
     private final AuthenticationService authenticationService;
     private final PasswordResetService passwordResetService;
+    private final PasswordResetRequestService passwordResetRequestService;
 
     public AuthController(
             AuthenticationService authenticationService,
-            PasswordResetService passwordResetService) {
+            PasswordResetService passwordResetService,
+            PasswordResetRequestService passwordResetRequestService) {
         this.authenticationService = authenticationService;
         this.passwordResetService = passwordResetService;
+        this.passwordResetRequestService = passwordResetRequestService;
     }
 
     @PostMapping("/register")
@@ -50,7 +54,7 @@ public class AuthController {
 
     @PostMapping("/password/forgot")
     public ResponseEntity<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        passwordResetService.requestReset(request);
+        passwordResetRequestService.requestReset(request);
         return ResponseEntity.noContent().build();
     }
 

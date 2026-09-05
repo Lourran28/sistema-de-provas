@@ -20,6 +20,7 @@ import br.com.provas.entities.UserEntity;
 import br.com.provas.entities.UserRole;
 import br.com.provas.exceptions.ConflictException;
 import br.com.provas.repositories.UserRepository;
+import br.com.provas.repositories.PasswordResetTokenRepository;
 import br.com.provas.security.JwtService;
 
 @Service
@@ -28,14 +29,17 @@ public class AuthenticationService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final PasswordResetTokenRepository tokenRepository;
 
     public AuthenticationService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            JwtService jwtService) {
+            JwtService jwtService,
+            PasswordResetTokenRepository tokenRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.tokenRepository = tokenRepository;
     }
 
     @Transactional
@@ -91,7 +95,7 @@ public class AuthenticationService {
 
     @Transactional
     public UserProfileResponse updateProfile(UUID userId, UpdateProfileRequest request) {
-        UserEntity user = userRepository.findById(userId)
+        UserEntity user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BadCredentialsException("Sessão não encontrada."));
         String email = normalizeEmail(request.email());
         userRepository.findByEmailIgnoreCase(email)
@@ -99,13 +103,16 @@ public class AuthenticationService {
                 .ifPresent(existingUser -> {
                     throw new ConflictException("Já existe uma conta cadastrada com este e-mail.");
                 });
+        if (!user.getEmail().equalsIgnoreCase(email)) {
+            tokenRepository.deleteByUserId(userId);
+        }
         user.updateProfile(normalizeName(request.name()), email);
         return UserProfileResponse.from(user);
     }
 
     @Transactional
     public void changePassword(UUID userId, ChangePasswordRequest request) {
-        UserEntity user = userRepository.findById(userId)
+        UserEntity user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BadCredentialsException("Sessão não encontrada."));
         validatePasswordByteLength(request.currentPassword());
         validatePasswordByteLength(request.newPassword());
@@ -118,10 +125,12 @@ public class AuthenticationService {
         }
 
         user.changePassword(passwordEncoder.encode(request.newPassword()));
+        tokenRepository.deleteByUserId(userId);
     }
 
     private AuthResponse createAuthResponse(UserEntity user) {
-        JwtService.TokenData tokenData = jwtService.createToken(user.getId(), user.getEmail(), user.getRole());
+        JwtService.TokenData tokenData = jwtService.createToken(
+                user.getId(), user.getEmail(), user.getRole(), user.getCredentialVersion());
         return new AuthResponse(
                 tokenData.token(),
                 "Bearer",

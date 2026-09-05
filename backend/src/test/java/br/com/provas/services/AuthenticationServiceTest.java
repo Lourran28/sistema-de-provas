@@ -28,6 +28,7 @@ import br.com.provas.entities.UserEntity;
 import br.com.provas.entities.UserRole;
 import br.com.provas.exceptions.ConflictException;
 import br.com.provas.repositories.UserRepository;
+import br.com.provas.repositories.PasswordResetTokenRepository;
 import br.com.provas.security.JwtService;
 
 @ExtendWith(MockitoExtension.class)
@@ -42,6 +43,9 @@ class AuthenticationServiceTest {
     @Mock
     private JwtService jwtService;
 
+    @Mock
+    private PasswordResetTokenRepository tokenRepository;
+
     @InjectMocks
     private AuthenticationService authenticationService;
 
@@ -50,7 +54,7 @@ class AuthenticationServiceTest {
         RegisterRequest request = new RegisterRequest("  Ana   Souza ", "ANA@Escola.com ", "senha-segura");
         when(userRepository.existsByEmailIgnoreCase("ana@escola.com")).thenReturn(false);
         when(passwordEncoder.encode("senha-segura")).thenReturn("hash-seguro");
-        when(jwtService.createToken(any(), eq("ana@escola.com"), eq(UserRole.TEACHER)))
+        when(jwtService.createToken(any(), eq("ana@escola.com"), eq(UserRole.TEACHER), eq(0L)))
                 .thenReturn(new JwtService.TokenData("token", Instant.parse("2026-08-26T15:00:00Z")));
 
         AuthResponse response = authenticationService.register(request);
@@ -89,7 +93,7 @@ class AuthenticationServiceTest {
         when(userRepository.findByEmailIgnoreCase("demonstracao@provas.local")).thenReturn(Optional.empty());
         when(passwordEncoder.encode(any())).thenReturn("hash-da-demonstracao");
         when(userRepository.saveAndFlush(any(UserEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(jwtService.createToken(any(), eq("demonstracao@provas.local"), eq(UserRole.TEACHER)))
+        when(jwtService.createToken(any(), eq("demonstracao@provas.local"), eq(UserRole.TEACHER), eq(0L)))
                 .thenReturn(new JwtService.TokenData("token-demo", Instant.parse("2026-08-27T15:00:00Z")));
 
         AuthResponse response = authenticationService.loginLocalDemo();
@@ -104,7 +108,7 @@ class AuthenticationServiceTest {
     @Test
     void updatesProfileWithNormalizedValues() {
         UserEntity user = new UserEntity("Ana", "ana@escola.com", "hash-seguro", UserRole.TEACHER);
-        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(userRepository.findByIdForUpdate(user.getId())).thenReturn(Optional.of(user));
         when(userRepository.findByEmailIgnoreCase("ana.souza@escola.com")).thenReturn(Optional.empty());
 
         var response = authenticationService.updateProfile(
@@ -115,13 +119,14 @@ class AuthenticationServiceTest {
         assertEquals("ana.souza@escola.com", response.email());
         assertEquals("Ana Souza", user.getName());
         assertEquals("ana.souza@escola.com", user.getEmail());
+        verify(tokenRepository).deleteByUserId(user.getId());
     }
 
     @Test
     void rejectsAnotherAccountEmailDuringProfileUpdate() {
         UserEntity user = new UserEntity("Ana", "ana@escola.com", "hash-seguro", UserRole.TEACHER);
         UserEntity otherUser = new UserEntity("Beatriz", "bia@escola.com", "hash-seguro", UserRole.TEACHER);
-        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(userRepository.findByIdForUpdate(user.getId())).thenReturn(Optional.of(user));
         when(userRepository.findByEmailIgnoreCase("bia@escola.com")).thenReturn(Optional.of(otherUser));
 
         assertThrows(
@@ -132,7 +137,7 @@ class AuthenticationServiceTest {
     @Test
     void changesPasswordWhenCurrentPasswordIsValid() {
         UserEntity user = new UserEntity("Ana", "ana@escola.com", "hash-atual", UserRole.TEACHER);
-        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(userRepository.findByIdForUpdate(user.getId())).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("senha-atual", "hash-atual")).thenReturn(true);
         when(passwordEncoder.matches("senha-nova", "hash-atual")).thenReturn(false);
         when(passwordEncoder.encode("senha-nova")).thenReturn("hash-novo");
@@ -142,12 +147,14 @@ class AuthenticationServiceTest {
                 new ChangePasswordRequest("senha-atual", "senha-nova"));
 
         assertEquals("hash-novo", user.getPasswordHash());
+        assertEquals(1, user.getCredentialVersion());
+        verify(tokenRepository).deleteByUserId(user.getId());
     }
 
     @Test
     void rejectsPasswordChangeWhenCurrentPasswordIsWrong() {
         UserEntity user = new UserEntity("Ana", "ana@escola.com", "hash-atual", UserRole.TEACHER);
-        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(userRepository.findByIdForUpdate(user.getId())).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("senha-errada", "hash-atual")).thenReturn(false);
 
         IllegalArgumentException exception = assertThrows(

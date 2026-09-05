@@ -9,22 +9,26 @@ import type {
   ResetPasswordInput,
 } from "../types/auth";
 
-import { apiGet, apiPatch, apiPost } from "./httpClient";
+import { apiPatch, apiPost, apiRequest } from "./httpClient";
+
+function publicAuthOptions() {
+  return { anonymous: true, signal: AbortSignal.timeout(120_000) };
+}
 
 export function login(credentials: LoginCredentials) {
-  return apiPost<AuthenticationResponse>("/auth/login", credentials);
+  return apiPost<AuthenticationResponse>("/auth/login", credentials, publicAuthOptions());
 }
 
 export function loginDemo() {
-  return apiPost<AuthenticationResponse>("/auth/demo", {});
+  return apiPost<AuthenticationResponse>("/auth/demo", {}, publicAuthOptions());
 }
 
 export function register(data: RegistrationData) {
-  return apiPost<AuthenticationResponse>("/auth/register", data);
+  return apiPost<AuthenticationResponse>("/auth/register", data, publicAuthOptions());
 }
 
 export function getCurrentUser() {
-  return apiGet<AuthenticatedUser>("/auth/me");
+  return apiRequest<AuthenticatedUser>("/auth/me", { signal: AbortSignal.timeout(120_000) });
 }
 
 export function updateProfile(input: ProfileUpdateInput) {
@@ -36,9 +40,9 @@ export function changePassword(input: ChangePasswordInput) {
 }
 
 export function requestPasswordReset(input: ForgotPasswordInput) {
-  return apiPost<void>("/auth/password/forgot", input);
+  return apiPost<void>("/auth/password/forgot", input, publicAuthOptions());
 }
 
 export function resetPassword(input: ResetPasswordInput) {
-  return apiPost<void>("/auth/password/reset", input);
+  return apiPost<void>("/auth/password/reset", input, publicAuthOptions());
 }

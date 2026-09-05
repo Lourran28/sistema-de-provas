@@ -24,6 +24,7 @@ import br.com.provas.security.JwtService;
 import br.com.provas.security.UserPrincipalService;
 import br.com.provas.services.AuthenticationService;
 import br.com.provas.services.PasswordResetService;
+import br.com.provas.services.PasswordResetRequestService;
 
 @WebMvcTest({ HealthController.class, AuthController.class })
 @Import({ SecurityConfig.class, HealthControllerTest.TestSecurityDependencies.class })
@@ -104,6 +105,11 @@ class HealthControllerTest {
         @Bean
         PasswordResetService passwordResetService() {
             return Mockito.mock(PasswordResetService.class);
+        }
+
+        @Bean
+        PasswordResetRequestService passwordResetRequestService() {
+            return Mockito.mock(PasswordResetRequestService.class);
         }
     }
 }

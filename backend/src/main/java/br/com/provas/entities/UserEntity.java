@@ -3,6 +3,8 @@ package br.com.provas.entities;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.hibernate.annotations.ColumnDefault;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -27,6 +29,10 @@ public class UserEntity {
 
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
+
+    @Column(name = "credential_version", nullable = false)
+    @ColumnDefault("0")
+    private long credentialVersion;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
@@ -86,6 +92,10 @@ public class UserEntity {
         return role;
     }
 
+    public long getCredentialVersion() {
+        return credentialVersion;
+    }
+
     public void updateProfile(String name, String email) {
         this.name = name;
         this.email = email;
@@ -93,5 +103,6 @@ public class UserEntity {
 
     public void changePassword(String passwordHash) {
         this.passwordHash = passwordHash;
+        this.credentialVersion++;
     }
 }

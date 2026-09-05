@@ -10,10 +10,10 @@ export const router = createBrowserRouter([
     children: [
       { path: "/login", element: lazyPage(async () => ({ default: (await import("../pages/LoginPage")).LoginPage })) },
       { path: "/cadastro", element: lazyPage(async () => ({ default: (await import("../pages/RegisterPage")).RegisterPage })) },
-      { path: "/esqueci-senha", element: lazyPage(async () => ({ default: (await import("../pages/ForgotPasswordPage")).ForgotPasswordPage })) },
-      { path: "/redefinir-senha", element: lazyPage(async () => ({ default: (await import("../pages/ResetPasswordPage")).ResetPasswordPage })) }
     ]
   },
+  { path: "/esqueci-senha", element: lazyPage(async () => ({ default: (await import("../pages/ForgotPasswordPage")).ForgotPasswordPage })) },
+  { path: "/redefinir-senha", element: lazyPage(async () => ({ default: (await import("../pages/ResetPasswordPage")).ResetPasswordPage })) },
   {
     element: <ProtectedRoute />,
     children: [

@@ -42,35 +42,31 @@ class PasswordResetServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
-    @Mock
-    private PasswordResetMailService mailService;
-
     @InjectMocks
     private PasswordResetService passwordResetService;
 
     @Test
     void silentlyIgnoresUnknownEmail() {
-        when(userRepository.findByEmailIgnoreCase("ausente@escola.com")).thenReturn(Optional.empty());
+        when(userRepository.findByEmailForUpdate("ausente@escola.com")).thenReturn(Optional.empty());
 
-        passwordResetService.requestReset(new ForgotPasswordRequest(" AUSENTE@escola.com "));
+        assertEquals(Optional.empty(), passwordResetService.requestReset(new ForgotPasswordRequest(" AUSENTE@escola.com ")));
 
         verify(tokenRepository, never()).save(any());
-        verify(mailService, never()).sendPasswordReset(any(), any());
     }
 
     @Test
     void createsHashedTokenAndSendsRawTokenByEmail() {
         UserEntity user = user();
-        when(userRepository.findByEmailIgnoreCase(user.getEmail())).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailForUpdate(user.getEmail())).thenReturn(Optional.of(user));
         when(tokenRepository.findFirstByUserIdOrderByCreatedAtDesc(user.getId())).thenReturn(Optional.empty());
 
-        passwordResetService.requestReset(new ForgotPasswordRequest(user.getEmail()));
+        var delivery = passwordResetService.requestReset(new ForgotPasswordRequest(user.getEmail())).orElseThrow();
 
         ArgumentCaptor<PasswordResetTokenEntity> entityCaptor = ArgumentCaptor.forClass(PasswordResetTokenEntity.class);
-        ArgumentCaptor<String> rawTokenCaptor = ArgumentCaptor.forClass(String.class);
         verify(tokenRepository).save(entityCaptor.capture());
-        verify(mailService).sendPasswordReset(org.mockito.ArgumentMatchers.eq(user.getEmail()), rawTokenCaptor.capture());
-        assertEquals(sha256(rawTokenCaptor.getValue()), entityCaptor.getValue().getTokenHash());
+        assertEquals(user.getEmail(), delivery.recipient());
+        assertEquals(43, delivery.token().length());
+        assertEquals(sha256(delivery.token()), entityCaptor.getValue().getTokenHash());
     }
 
     @Test
@@ -83,12 +79,15 @@ class PasswordResetServiceTest {
                 Instant.now().plusSeconds(300),
                 Instant.now());
         when(tokenRepository.findByTokenHash(sha256(rawToken))).thenReturn(Optional.of(token));
+        when(tokenRepository.findUserIdByTokenHash(sha256(rawToken))).thenReturn(Optional.of(user.getId()));
+        when(userRepository.findByIdForUpdate(user.getId())).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("senha-nova", "hash-atual")).thenReturn(false);
         when(passwordEncoder.encode("senha-nova")).thenReturn("hash-novo");
 
         passwordResetService.resetPassword(new ResetPasswordRequest(rawToken, "senha-nova"));
 
         assertEquals("hash-novo", user.getPasswordHash());
+        assertEquals(1, user.getCredentialVersion());
         verify(tokenRepository).deleteByUserId(user.getId());
     }
 
@@ -102,6 +101,8 @@ class PasswordResetServiceTest {
                 Instant.now().minusSeconds(1),
                 Instant.now().minusSeconds(901));
         when(tokenRepository.findByTokenHash(sha256(rawToken))).thenReturn(Optional.of(token));
+        when(tokenRepository.findUserIdByTokenHash(sha256(rawToken))).thenReturn(Optional.of(user.getId()));
+        when(userRepository.findByIdForUpdate(user.getId())).thenReturn(Optional.of(user));
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
@@ -109,6 +110,30 @@ class PasswordResetServiceTest {
 
         assertEquals("Este link expirou. Solicite uma nova redefinição de senha.", exception.getMessage());
         assertEquals("hash-atual", user.getPasswordHash());
+    }
+
+    @Test
+    void suppressesRequestsDuringCooldown() {
+        UserEntity user = user();
+        when(userRepository.findByEmailForUpdate(user.getEmail())).thenReturn(Optional.of(user));
+        when(tokenRepository.findFirstByUserIdOrderByCreatedAtDesc(user.getId())).thenReturn(Optional.of(
+                new PasswordResetTokenEntity(user, "hash", Instant.now().plusSeconds(900), Instant.now())));
+
+        assertEquals(Optional.empty(), passwordResetService.requestReset(new ForgotPasswordRequest(user.getEmail())));
+        verify(tokenRepository, never()).save(any());
+        verify(tokenRepository, never()).deleteByUserId(any());
+    }
+
+    @Test
+    void rejectsTokenConsumedWhileWaitingForLock() {
+        UserEntity user = user();
+        when(tokenRepository.findUserIdByTokenHash(sha256("used"))).thenReturn(Optional.of(user.getId()));
+        when(userRepository.findByIdForUpdate(user.getId())).thenReturn(Optional.of(user));
+        when(tokenRepository.findByTokenHash(sha256("used"))).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> passwordResetService.resetPassword(new ResetPasswordRequest("used", "senha-nova")));
+        verify(passwordEncoder, never()).encode(any());
     }
 
     private UserEntity user() {

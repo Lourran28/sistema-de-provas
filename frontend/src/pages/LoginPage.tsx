@@ -9,6 +9,7 @@ import { ApiRequestError } from "../services/httpClient";
 
 type LocationState = {
   from?: { pathname?: string };
+  passwordChanged?: boolean;
 };
 
 export function LoginPage() {
@@ -69,6 +70,11 @@ export function LoginPage() {
         </div>
 
         <form className="mt-7 space-y-5 rounded-lg border border-stone-200 bg-white p-6 shadow-panel sm:p-7" onSubmit={handleSubmit}>
+          {(location.state as LocationState | null)?.passwordChanged ? (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800" role="status">
+              Senha alterada. Entre novamente com sua nova senha.
+            </div>
+          ) : null}
           {error ? (
             <div aria-live="polite" className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" role="alert">
               {error}

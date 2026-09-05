@@ -11,3 +11,5 @@ target
 *.log
 *.err.log
 backups/
+frontend/test-results/
+frontend/playwright-report/

@@ -35,7 +35,10 @@ export function clearAccessToken() {
   localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
 }
 
-export async function apiRequest<TResponse>(path: string, init: RequestInit = {}): Promise<TResponse> {
+type ApiRequestOptions = RequestInit & { anonymous?: boolean };
+
+export async function apiRequest<TResponse>(path: string, options: ApiRequestOptions = {}): Promise<TResponse> {
+  const { anonymous = false, ...init } = options;
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
 
@@ -44,7 +47,7 @@ export async function apiRequest<TResponse>(path: string, init: RequestInit = {}
   }
 
   const accessToken = getAccessToken();
-  if (accessToken) {
+  if (accessToken && !anonymous) {
     headers.set("Authorization", `Bearer ${accessToken}`);
   }
 
@@ -65,8 +68,9 @@ export function apiGet<TResponse>(path: string) {
   return apiRequest<TResponse>(path);
 }
 
-export function apiPost<TResponse>(path: string, body: unknown) {
+export function apiPost<TResponse>(path: string, body: unknown, options: Pick<ApiRequestOptions, "anonymous" | "signal"> = {}) {
   return apiRequest<TResponse>(path, {
+    ...options,
     method: "POST",
     body: JSON.stringify(body)
   });

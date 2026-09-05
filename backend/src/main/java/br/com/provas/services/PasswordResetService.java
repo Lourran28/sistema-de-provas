@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Locale;
+import java.util.Optional;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -31,37 +32,38 @@ public class PasswordResetService {
     private final UserRepository userRepository;
     private final PasswordResetTokenRepository tokenRepository;
     private final PasswordEncoder passwordEncoder;
-    private final PasswordResetMailService mailService;
 
     public PasswordResetService(
             UserRepository userRepository,
             PasswordResetTokenRepository tokenRepository,
-            PasswordEncoder passwordEncoder,
-            PasswordResetMailService mailService) {
+            PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.tokenRepository = tokenRepository;
         this.passwordEncoder = passwordEncoder;
-        this.mailService = mailService;
     }
 
     @Transactional
-    public void requestReset(ForgotPasswordRequest request) {
-        userRepository.findByEmailIgnoreCase(normalizeEmail(request.email()))
-                .ifPresent(this::createAndSendToken);
+    public Optional<ResetDelivery> requestReset(ForgotPasswordRequest request) {
+        return userRepository.findByEmailForUpdate(normalizeEmail(request.email()))
+                .flatMap(this::createToken);
     }
 
     @Transactional
     public void resetPassword(ResetPasswordRequest request) {
-        Instant now = Instant.now();
-        PasswordResetTokenEntity resetToken = tokenRepository.findByTokenHash(hashToken(request.token()))
+        String hash = hashToken(request.token());
+        var userId = tokenRepository.findUserIdByTokenHash(hash)
+                .orElseThrow(() -> new IllegalArgumentException("Este link é inválido ou já foi utilizado."));
+        // All credential changes lock the user first, then re-read the token after waiting.
+        UserEntity user = userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Este link é inválido ou já foi utilizado."));
+        PasswordResetTokenEntity resetToken = tokenRepository.findByTokenHash(hash)
                 .orElseThrow(() -> new IllegalArgumentException("Este link é inválido ou já foi utilizado."));
 
-        if (!resetToken.getExpiresAt().isAfter(now)) {
+        if (!resetToken.getExpiresAt().isAfter(Instant.now())) {
             throw new IllegalArgumentException("Este link expirou. Solicite uma nova redefinição de senha.");
         }
 
         validatePasswordByteLength(request.newPassword());
-        UserEntity user = resetToken.getUser();
         if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
             throw new IllegalArgumentException("A nova senha deve ser diferente da senha anterior.");
         }
@@ -70,13 +72,13 @@ public class PasswordResetService {
         tokenRepository.deleteByUserId(user.getId());
     }
 
-    private void createAndSendToken(UserEntity user) {
+    private Optional<ResetDelivery> createToken(UserEntity user) {
         Instant now = Instant.now();
         boolean requestedRecently = tokenRepository.findFirstByUserIdOrderByCreatedAtDesc(user.getId())
                 .map(token -> token.getCreatedAt().isAfter(now.minus(REQUEST_COOLDOWN)))
                 .orElse(false);
         if (requestedRecently) {
-            return;
+            return Optional.empty();
         }
 
         String rawToken = generateToken();
@@ -86,7 +88,14 @@ public class PasswordResetService {
                 hashToken(rawToken),
                 now.plus(TOKEN_LIFETIME),
                 now));
-        mailService.sendPasswordReset(user.getEmail(), rawToken);
+        return Optional.of(new ResetDelivery(user.getEmail(), rawToken));
+    }
+
+    public record ResetDelivery(String recipient, String token) {
+        @Override
+        public String toString() {
+            return "ResetDelivery[redacted]";
+        }
     }
 
     private String generateToken() {

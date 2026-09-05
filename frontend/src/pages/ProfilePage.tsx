@@ -1,5 +1,6 @@
 import { CheckCircle2, Eye, EyeOff, KeyRound, LogOut, Pencil, Save, ShieldCheck, UserRound, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -9,6 +10,7 @@ import { changePassword } from "../services/authService";
 import { ApiRequestError } from "../services/httpClient";
 
 export function ProfilePage() {
+  const navigate = useNavigate();
   const { signOut, updateProfile, user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState("");
@@ -112,7 +114,8 @@ export function ProfilePage() {
           onClose={() => setIsPasswordModalOpen(false)}
           onSuccess={() => {
             setIsPasswordModalOpen(false);
-            setNotice("Senha alterada com sucesso.");
+            signOut();
+            navigate("/login", { replace: true, state: { passwordChanged: true }, flushSync: true });
           }}
         />
       ) : null}

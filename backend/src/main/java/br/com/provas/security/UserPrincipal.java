@@ -9,10 +9,10 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import br.com.provas.entities.UserEntity;
 import br.com.provas.entities.UserRole;
 
-public record UserPrincipal(UUID id, String name, String email, UserRole role) {
+public record UserPrincipal(UUID id, String name, String email, UserRole role, long credentialVersion) {
 
     public static UserPrincipal from(UserEntity user) {
-        return new UserPrincipal(user.getId(), user.getName(), user.getEmail(), user.getRole());
+        return new UserPrincipal(user.getId(), user.getName(), user.getEmail(), user.getRole(), user.getCredentialVersion());
     }
 
     public List<GrantedAuthority> authorities() {

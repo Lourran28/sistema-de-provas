@@ -15,16 +15,17 @@ export function ForgotPasswordPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSubmitting) return;
     setError("");
     setIsSubmitting(true);
 
     try {
-      await requestPasswordReset({ email });
+      await requestPasswordReset({ email: email.trim() });
       setIsSent(true);
     } catch (requestError) {
       setError(
         requestError instanceof ApiRequestError
-          ? requestError.message
+          ? requestError.fieldErrors.email ?? requestError.message
           : "Não foi possível enviar a solicitação agora. Tente novamente."
       );
     } finally {
@@ -52,6 +53,9 @@ export function ForgotPasswordPage() {
               Se existir uma conta com esse endereço, enviaremos um link válido por 15 minutos.
               Verifique também a caixa de spam.
             </p>
+            <Button className="mt-5 w-full" icon={Mail} onClick={() => setIsSent(false)} variant="secondary">
+              Solicitar outro link
+            </Button>
           </div>
         ) : (
           <form className="mt-7 space-y-5 rounded-lg border border-stone-200 bg-white p-6 shadow-panel sm:p-7" onSubmit={handleSubmit}>
@@ -67,6 +71,7 @@ export function ForgotPasswordPage() {
                 autoComplete="email"
                 className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
                 id="reset-email"
+                maxLength={180}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="professor@escola.com"
                 required

@@ -1,5 +1,7 @@
 package br.com.provas.services;
 
+import java.net.URI;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -18,11 +20,18 @@ public class PasswordResetMailService {
             @Value("${app.frontend-url}") String frontendUrl) {
         this.mailSender = mailSender;
         this.from = from;
-        this.frontendUrl = frontendUrl.replaceAll("/+$", "");
+        URI base = URI.create(frontendUrl.trim());
+        boolean localHttp = "http".equals(base.getScheme())
+                && ("localhost".equals(base.getHost()) || "127.0.0.1".equals(base.getHost()));
+        if ((!"https".equals(base.getScheme()) && !localHttp) || base.getHost() == null
+                || base.getUserInfo() != null || base.getQuery() != null || base.getFragment() != null) {
+            throw new IllegalArgumentException("APP_FRONTEND_URL deve ser uma URL HTTPS sem credenciais, consulta ou fragmento.");
+        }
+        this.frontendUrl = base.toString().replaceAll("/+$", "");
     }
 
     public void sendPasswordReset(String recipient, String token) {
-        String resetUrl = frontendUrl + "/redefinir-senha?token=" + token;
+        String resetUrl = frontendUrl + "/redefinir-senha#token=" + token;
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(from);
         message.setTo(recipient);

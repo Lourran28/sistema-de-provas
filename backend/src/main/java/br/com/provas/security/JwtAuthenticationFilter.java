@@ -35,6 +35,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        if (!"POST".equals(request.getMethod())) {
+            return false;
+        }
+        String path = request.getRequestURI().substring(request.getContextPath().length());
+        return switch (path) {
+            case "/api/auth/login", "/api/auth/register", "/api/auth/demo",
+                    "/api/auth/password/forgot", "/api/auth/password/reset" -> true;
+            default -> false;
+        };
+    }
+
+    @Override
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
@@ -48,6 +61,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             JwtService.TokenClaims claims = jwtService.validateToken(authorization.substring(BEARER_PREFIX.length()));
             UserPrincipal principal = userPrincipalService.loadById(claims.userId());
+            if (principal.credentialVersion() != claims.credentialVersion()) {
+                throw new JWTVerificationException("Sessão encerrada após alteração de senha.");
+            }
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                     principal,
                     null,

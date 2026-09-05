@@ -10,7 +10,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
 
   useEffect(() => {
-    if (!getAccessToken()) {
+    const initialToken = getAccessToken();
+    if (!initialToken) {
       return;
     }
 
@@ -18,12 +19,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     getCurrentUser()
       .then((currentUser) => {
-        if (!ignore) {
+        if (!ignore && getAccessToken() === initialToken) {
           setUser(currentUser);
         }
       })
       .catch(() => {
-        if (!ignore) {
+        if (!ignore && getAccessToken() === initialToken) {
           clearAccessToken();
           setUser(null);
         }
@@ -60,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(() => {
     clearAccessToken();
     setUser(null);
+    setIsReady(true);
   }, []);
 
   const updateProfile = useCallback(async (data: ProfileUpdateInput) => {

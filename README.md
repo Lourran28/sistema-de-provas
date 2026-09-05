@@ -124,6 +124,48 @@ $env:JWT_SECRET = "substitua-por-uma-chave-secreta-longa-e-unica"
 - `POST /api/auth/login`: inicia uma sessão e retorna um token JWT.
 - `GET /api/auth/me`: retorna o perfil da sessão autenticada.
 - `PATCH /api/auth/me`: atualiza nome e e-mail da conta autenticada.
+- `PATCH /api/auth/me/password`: troca a senha com confirmação da senha atual e encerra as sessões existentes.
+- `POST /api/auth/password/forgot`: solicita um link de recuperação, sem revelar se o e-mail está cadastrado.
+- `POST /api/auth/password/reset`: consome o link uma única vez e define a nova senha.
+
+### E-mail de recuperação (Brevo)
+
+Configure no **backend** (Render > Environment), nunca em variáveis `VITE_`:
+
+```text
+SPRING_MAIL_HOST=smtp-relay.brevo.com
+SPRING_MAIL_PORT=2525
+SPRING_MAIL_USERNAME=login SMTP exibido no Brevo
+SPRING_MAIL_PASSWORD=chave SMTP do Brevo, não a senha do Gmail
+SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=true
+SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE=true
+SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED=true
+APP_MAIL_FROM=seu-remetente-verificado@exemplo.com
+APP_FRONTEND_URL=https://seu-frontend.vercel.app
+```
+
+O [Render gratuito bloqueia as portas 25, 465 e 587](https://render.com/docs/free). O [Brevo oferece a porta 2525 com TLS](https://help.brevo.com/hc/en-us/articles/10905415650322-Which-SMTP-port-should-I-use-Port-587-465-or-2525), alternativa a testar nesse ambiente. Em hospedagens sem esse bloqueio, 587 também pode ser usada.
+
+Se o bloqueio de IPs não autorizados estiver ativo no Brevo, autorize os IPs de saída do backend, consultados em [Render > Connect > Outbound](https://render.com/docs/outbound-ip-addresses). Não use o IP do seu computador. Verifique também a ativação do envio transacional e o remetente; um Gmail verificado não equivale a um domínio autenticado. Para produção, prefira um domínio próprio com DKIM/DMARC configurados.
+
+Salve as variáveis e faça novo deploy. Depois teste `Esqueci minha senha` com uma conta já cadastrada. Confira a caixa de entrada/spam e os logs transacionais do Brevo. A resposta 204 da API confirma o recebimento da solicitação, **não a entrega do e-mail**.
+
+Os links expiram em 15 minutos, são armazenados apenas como hash e são invalidados após uso, troca de senha ou alteração do e-mail. Há intervalo mínimo de um minuto entre emissões por conta. O envio acontece fora da requisição HTTP e da transação do banco, em fila limitada em memória; reinícios ou fila cheia podem descartar solicitações, exigindo um novo pedido. Erros de envio são registrados sem expor e-mail, chave ou token. A conexão SMTP tem limite de 5 segundos e leitura/escrita de 10 segundos.
+
+Os testes de integração usam H2 isolado e um remetente simulado, sem disparar e-mails reais:
+
+```powershell
+cd backend
+.\mvnw.cmd test
+```
+
+Os testes de navegador simulam a API e cobrem recuperação e troca de senha em desktop e celular. Com Google Chrome instalado:
+
+```powershell
+cd frontend
+npm ci
+npm run test:e2e
+```
 
 ## Disciplinas e conteúdos
 

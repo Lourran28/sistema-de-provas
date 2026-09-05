@@ -60,7 +60,7 @@ class ExamVersionExportServiceTest {
         UUID examId = UUID.randomUUID();
         UUID subjectId = UUID.randomUUID();
         versionId = UUID.randomUUID();
-        teacher = new UserPrincipal(teacherId, "Professora Ana", "ana@escola.com", UserRole.TEACHER);
+        teacher = new UserPrincipal(teacherId, "Professora Ana", "ana@escola.com", UserRole.TEACHER, 0);
 
         ExamVersionQuestionResponse question = new ExamVersionQuestionResponse(
                 UUID.randomUUID(),
