@@ -1,14 +1,13 @@
 import { CircleCheck, ImagePlus, Plus, Save, Trash2, X } from "lucide-react";
-import { type ChangeEvent, type FormEvent, useMemo, useState } from "react";
+import { type ChangeEvent, type FormEvent, useState } from "react";
 
 import { Button } from "../../components/ui/Button";
 import { ModalDialog } from "../../components/ui/ModalDialog";
 import { ApiRequestError } from "../../services/httpClient";
-import type { Content, Subject } from "../../types/contents";
+import type { Subject } from "../../types/contents";
 import { difficultyLabels, type Question, type QuestionDifficulty, type QuestionInput } from "../../types/questions";
 
 type QuestionFormModalProps = {
-  contents: Content[];
   onClose: () => void;
   onCreateSubject: (name: string) => Promise<Subject>;
   onSave: (input: QuestionInput) => Promise<void>;
@@ -20,10 +19,8 @@ const emptyAlternatives = [{ text: "" }, { text: "" }];
 const MAX_INPUT_IMAGE_SIZE = 8 * 1024 * 1024;
 const MAX_STORED_IMAGE_LENGTH = 600000;
 
-export function QuestionFormModal({ contents, onClose, onCreateSubject, onSave, question, subjects }: QuestionFormModalProps) {
-  const initialContentId = question?.contentIds[0] ?? "";
+export function QuestionFormModal({ onClose, onCreateSubject, onSave, question, subjects }: QuestionFormModalProps) {
   const [subjectName, setSubjectName] = useState(() => subjects.find((subject) => subject.id === question?.subjectId)?.name ?? "");
-  const [contentId, setContentId] = useState(initialContentId);
   const [statement, setStatement] = useState(question?.statement ?? "");
   const [imageUrl, setImageUrl] = useState(question?.imageUrl ?? "");
   const [difficulty, setDifficulty] = useState<QuestionDifficulty>(question?.difficulty ?? "MEDIUM");
@@ -37,16 +34,6 @@ export function QuestionFormModal({ contents, onClose, onCreateSubject, onSave, 
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
-
-  const sortedContents = useMemo(() => [...contents].sort((first, second) => first.title.localeCompare(second.title, "pt-BR")), [contents]);
-
-  function changeContent(nextContentId: string) {
-    setContentId(nextContentId);
-    const selectedContent = contents.find((content) => content.id === nextContentId);
-    if (selectedContent?.subjectId) {
-      setSubjectName(subjects.find((subject) => subject.id === selectedContent.subjectId)?.name ?? "");
-    }
-  }
 
   function changeAlternative(index: number, text: string) {
     setAlternatives((current) => current.map((alternative, position) => (position === index ? { text } : alternative)));
@@ -103,7 +90,7 @@ export function QuestionFormModal({ contents, onClose, onCreateSubject, onSave, 
       const subjectId = normalizedSubjectName ? (existingSubject ?? await onCreateSubject(normalizedSubjectName)).id : undefined;
       await onSave({
         subjectId,
-        contentId: contentId || undefined,
+        contentId: question?.contentIds[0],
         statement,
         imageUrl: imageUrl.trim() || undefined,
         questionType: "MULTIPLE_CHOICE",
@@ -129,7 +116,7 @@ export function QuestionFormModal({ contents, onClose, onCreateSubject, onSave, 
             </div>
           ) : null}
 
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="max-w-xl">
             <label className="block text-sm font-medium text-slate-700" htmlFor="question-subject">
               Disciplina
               <input
@@ -147,23 +134,6 @@ export function QuestionFormModal({ contents, onClose, onCreateSubject, onSave, 
                 ))}
               </datalist>
               <span className="mt-1 block text-xs font-normal text-slate-500">Uma disciplina nova será criada ao salvar.</span>
-            </label>
-
-            <label className="block text-sm font-medium text-slate-700" htmlFor="question-content">
-              Conteúdo de origem
-              <select
-                className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-800 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
-                id="question-content"
-                onChange={(event) => changeContent(event.target.value)}
-                value={contentId}
-              >
-                <option value="">Sem conteúdo vinculado</option>
-                {sortedContents.map((content) => (
-                  <option key={content.id} value={content.id}>
-                    {content.title}
-                  </option>
-                ))}
-              </select>
             </label>
           </div>
 

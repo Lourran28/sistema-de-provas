@@ -287,7 +287,6 @@ export function QuestionsPage() {
 
       {isQuestionModalOpen ? (
         <QuestionFormModal
-          contents={contents}
           onClose={() => setIsQuestionModalOpen(false)}
           onCreateSubject={createAndSelectSubject}
           onSave={saveQuestion}

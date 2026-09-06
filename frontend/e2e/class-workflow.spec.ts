@@ -68,6 +68,7 @@ test("question editing confirms the saved action", async ({ page }) => {
   });
   await page.goto("/questoes");
   await page.getByRole("button", { name: "Editar questão" }).click();
+  await expect(page.getByLabel("Conteúdo de origem")).toHaveCount(0);
   await page.getByLabel("Enunciado").fill("Questão atualizada");
   await page.getByRole("button", { name: "Salvar alterações" }).click();
   await expect(page.getByRole("status")).toContainText("Questão atualizada com sucesso");

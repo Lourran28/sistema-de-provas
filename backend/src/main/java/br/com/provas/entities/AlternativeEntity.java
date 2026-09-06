@@ -9,9 +9,14 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 @Entity
-@Table(name = "alternatives")
+@Table(
+        name = "alternatives",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uq_alternatives_question_position",
+                columnNames = {"question_id", "position"}))
 public class AlternativeEntity {
 
     @Id

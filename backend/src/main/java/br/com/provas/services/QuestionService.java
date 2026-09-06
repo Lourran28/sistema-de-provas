@@ -288,7 +288,9 @@ public class QuestionService {
 
     private void replaceDetails(UUID questionId, UUID contentId, QuestionRequest request) {
         alternativeRepository.deleteByQuestionId(questionId);
+        alternativeRepository.flush();
         questionContentRepository.deleteByIdQuestionId(questionId);
+        questionContentRepository.flush();
 
         List<AlternativeEntity> alternatives = new ArrayList<>();
         for (int index = 0; index < request.alternatives().size(); index++) {
