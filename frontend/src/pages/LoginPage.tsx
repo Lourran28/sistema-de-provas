@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { AuthShell } from "../components/auth/AuthShell";
 import { Button } from "../components/ui/Button";
+import { SlowServerNotice } from "../features/auth/SlowServerNotice";
 import { useAuth } from "../features/auth/useAuth";
 import { ApiRequestError } from "../services/httpClient";
 
@@ -131,6 +132,8 @@ export function LoginPage() {
           <Button className="w-full" disabled={isSubmitting} icon={ArrowRight} type="submit">
             {isSubmitting ? "Entrando..." : "Entrar"}
           </Button>
+
+          {isSubmitting ? <SlowServerNotice className="text-center text-xs leading-5 text-slate-500" /> : null}
 
           {isLocalDemoAvailable ? (
             <Button className="w-full" disabled={isSubmitting} icon={Sparkles} onClick={() => void handleDemoSignIn()} variant="secondary">

@@ -348,7 +348,7 @@ function QuestionTable({ contentNames, isLoading, onEdit, onRemove, questions, s
               <th className="px-5 py-3">Enunciado</th>
               <th className="px-5 py-3">Disciplina</th>
               <th className="px-5 py-3">Dificuldade</th>
-              <th className="px-5 py-3">Conteúdo</th>
+              <th className="px-5 py-3">Origem</th>
               <th className="w-28 px-5 py-3 text-right">Ações</th>
             </tr>
           </thead>

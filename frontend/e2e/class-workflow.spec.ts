@@ -67,6 +67,8 @@ test("question editing confirms the saved action", async ({ page }) => {
     await route.fulfill({ json: question() });
   });
   await page.goto("/questoes");
+  await expect(page.locator("th", { hasText: "Origem" })).toHaveCount(1);
+  await expect(page.locator("th", { hasText: "Conteúdo" })).toHaveCount(0);
   await page.getByRole("button", { name: "Editar questão" }).click();
   await expect(page.getByLabel("Conteúdo de origem")).toHaveCount(0);
   await page.getByLabel("Enunciado").fill("Questão atualizada");

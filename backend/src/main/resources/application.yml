@@ -51,3 +51,8 @@ app:
       secret: ${JWT_SECRET}
       issuer: ${JWT_ISSUER:provas-api}
       expiration-minutes: ${JWT_EXPIRATION_MINUTES:480}
+
+logging:
+  level:
+    # Hibernate includes JDBC credentials in its INFO connection metadata on some providers.
+    org.hibernate.orm.connections.pooling: WARN
