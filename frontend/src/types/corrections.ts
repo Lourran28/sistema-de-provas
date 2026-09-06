@@ -10,7 +10,7 @@ export type CorrectionAnswerInput = {
 export type CorrectionInput = {
   examVersionId: string;
   studentId?: string;
-  studentName: string;
+  studentName?: string;
   studentIdentifier?: string;
   classGroup?: string;
   answers: CorrectionAnswerInput[];

@@ -503,15 +503,16 @@ public class CorrectionService {
             StudentEntity student = studentService.findEntity(teacherId, request.studentId());
             return new StudentReference(student.getId(), student.getName(), student.getIdentifier(), student.getClassGroup());
         }
-        String studentName = blankToNull(request.studentName());
-        if (studentName == null) {
-            throw new IllegalArgumentException("Informe o nome do aluno ou selecione um aluno cadastrado.");
+        String classGroup = blankToNull(request.classGroup());
+        if (classGroup == null) {
+            throw new IllegalArgumentException("Informe a turma desta correção.");
         }
+        String studentName = blankToNull(request.studentName());
         return new StudentReference(
                 null,
-                studentName.replaceAll("\\s+", " "),
+                studentName == null ? "Registro da turma" : studentName.replaceAll("\\s+", " "),
                 blankToNull(request.studentIdentifier()),
-                blankToNull(request.classGroup()));
+                classGroup.replaceAll("\\s+", " "));
     }
 
     private String letterFor(int position) {

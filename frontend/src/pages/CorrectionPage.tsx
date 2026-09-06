@@ -1,19 +1,16 @@
 import { CheckCircle2, ClipboardCheck, Files, ListChecks, ScanLine, Save } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Button } from "../components/ui/Button";
 import { useConfirmation } from "../components/ui/confirmationContext";
 import { AnswerCardImportPanel } from "../features/corrections/AnswerCardImportPanel";
 import type { AnswerCardScanResult } from "../features/corrections/answerCardScanner";
-import { getExamApplications } from "../services/examApplicationService";
 import { confirmCorrection, createCorrection, updateCorrection } from "../services/correctionService";
 import { getExamVersions } from "../services/examService";
 import { ApiRequestError } from "../services/httpClient";
-import { getStudents } from "../services/studentService";
 import type { Correction, CorrectionInput, StudentAnswerStatus } from "../types/corrections";
 import type { ExamVersion } from "../types/exams";
-import type { Student } from "../types/students";
 
 type DraftAnswer = {
   selectedAlternativeId: string | null;
@@ -25,26 +22,19 @@ export function CorrectionPage() {
   const { confirm } = useConfirmation();
   const [versions, setVersions] = useState<ExamVersion[]>([]);
   const [selectedVersion, setSelectedVersion] = useState<ExamVersion | null>(null);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [studentId, setStudentId] = useState("");
   const [answers, setAnswers] = useState<Record<string, DraftAnswer>>({});
-  const [studentName, setStudentName] = useState("");
-  const [studentIdentifier, setStudentIdentifier] = useState("");
   const [classGroup, setClassGroup] = useState("");
   const [correction, setCorrection] = useState<Correction | null>(null);
-  const [applicationVersionByStudent, setApplicationVersionByStudent] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
-  const selectedVersionIdRef = useRef("");
 
   useEffect(() => {
     let active = true;
-    Promise.all([getExamVersions(), getStudents()])
-      .then(([nextVersions, nextStudents]) => {
+    getExamVersions()
+      .then((nextVersions) => {
         if (active) {
           setVersions(nextVersions);
-          setStudents(nextStudents);
         }
       })
       .catch((requestError: unknown) => {
@@ -75,47 +65,10 @@ export function CorrectionPage() {
     setAnswers(nextAnswers);
     setCorrection(null);
     setError("");
-    selectedVersionIdRef.current = version.id;
-    setApplicationVersionByStudent({});
-    void loadApplicationAssignments(version);
-  }
-
-  async function loadApplicationAssignments(version: ExamVersion) {
-    try {
-      const applications = await getExamApplications(version.examId);
-      if (selectedVersionIdRef.current !== version.id) {
-        return;
-      }
-      const assignments: Record<string, string> = {};
-      for (const application of applications) {
-        for (const student of application.students) {
-          if (student.studentId && !assignments[student.studentId]) {
-            assignments[student.studentId] = student.examVersionId;
-          }
-        }
-      }
-      setApplicationVersionByStudent(assignments);
-    } catch {
-      if (selectedVersionIdRef.current === version.id) {
-        setApplicationVersionByStudent({});
-      }
-    }
   }
 
   function updateAnswer(questionId: string, selectedAlternativeId: string | null, status: DraftAnswer["status"]) {
     setAnswers((current) => ({ ...current, [questionId]: { selectedAlternativeId, status } }));
-    setCorrection(null);
-  }
-
-  function selectStudent(nextStudentId: string) {
-    setStudentId(nextStudentId);
-    const student = students.find((item) => item.id === nextStudentId);
-    if (!student) {
-      return;
-    }
-    setStudentName(student.name);
-    setStudentIdentifier(student.identifier ?? "");
-    setClassGroup(student.classGroup);
     setCorrection(null);
   }
 
@@ -127,24 +80,18 @@ export function CorrectionPage() {
     setCorrection(null);
   }, []);
 
-  const assignedVersionId = studentId ? applicationVersionByStudent[studentId] : undefined;
-  const assignedVersion = versions.find((version) => version.id === assignedVersionId);
-
   function buildRequest(): CorrectionInput | null {
     if (!selectedVersion) {
       setError("Identifique uma versão de prova antes de continuar.");
       return null;
     }
-    if (!studentName.trim()) {
-      setError("Informe o nome do aluno antes de revisar a correção.");
+    if (!classGroup.trim()) {
+      setError("Informe a turma antes de revisar a correção.");
       return null;
     }
     return {
       examVersionId: selectedVersion.id,
-      studentId: studentId || undefined,
-      studentName: studentName.trim(),
-      studentIdentifier: studentIdentifier.trim() || undefined,
-      classGroup: classGroup.trim() || undefined,
+      classGroup: classGroup.trim(),
       answers: selectedVersion.questions.map((question) => ({
         examVersionQuestionId: question.id,
         selectedAlternativeId: answers[question.id]?.selectedAlternativeId ?? null,
@@ -234,36 +181,17 @@ export function CorrectionPage() {
 
       {selectedVersion ? (
         <>
-          <section className="grid gap-4 border-y border-stone-200 py-6 sm:grid-cols-3">
-            <div className="sm:col-span-3">
+          <section className="grid gap-4 border-y border-stone-200 py-6 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+            <div className="sm:col-span-2">
               <p className="text-xs font-semibold uppercase text-teal-800">Etapa 2 · Versão selecionada</p>
               <h2 className="mt-1 text-lg font-semibold text-slate-950">{selectedVersion.examTitle} · Versão {selectedVersion.label}</h2>
             </div>
-            <label className="block text-sm font-medium text-slate-700 sm:col-span-3" htmlFor="correction-student">
-              Aluno cadastrado
-              <select className="mt-2 h-11 w-full border border-stone-300 bg-white px-3 font-normal text-slate-900 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id="correction-student" onChange={(event) => selectStudent(event.target.value)} value={studentId}>
-                <option value="">Preencher aluno manualmente</option>
-                {students.map((student) => <option key={student.id} value={student.id}>{student.name} · {student.classGroup}{student.identifier ? ` · ${student.identifier}` : ""}</option>)}
-              </select>
-            </label>
-            <label className="block text-sm font-medium text-slate-700 sm:col-span-2">
-              Nome do aluno
-              <input className="mt-2 h-11 w-full border border-stone-300 bg-white px-3 font-normal outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" onChange={(event) => { setStudentId(""); setStudentName(event.target.value); }} value={studentName} />
-            </label>
-            <label className="block text-sm font-medium text-slate-700">
+            <label className="block text-sm font-medium text-slate-700" htmlFor="correction-class">
               Turma
-              <input className="mt-2 h-11 w-full border border-stone-300 bg-white px-3 font-normal outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" onChange={(event) => { setStudentId(""); setClassGroup(event.target.value); }} value={classGroup} />
-            </label>
-            <label className="block text-sm font-medium text-slate-700 sm:col-span-2">
-              Matrícula ou identificação
-              <input className="mt-2 h-11 w-full border border-stone-300 bg-white px-3 font-normal outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" onChange={(event) => { setStudentId(""); setStudentIdentifier(event.target.value); }} value={studentIdentifier} />
+              <input autoComplete="off" className="mt-2 h-11 w-full border border-stone-300 bg-white px-3 font-normal outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id="correction-class" maxLength={120} onChange={(event) => { setClassGroup(event.target.value); setCorrection(null); }} placeholder="Ex.: 8º A" required value={classGroup} />
             </label>
             <p className="self-end pb-1 text-sm text-slate-500">{answerCount} respostas marcadas de {selectedVersion.questions.length}</p>
           </section>
-
-          {assignedVersion && assignedVersion.id !== selectedVersion.id ? (
-            <div className="border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950" role="alert">Na aplicação registrada, este aluno recebeu a versão <strong>{assignedVersion.label}</strong>. Selecione essa versão para usar o gabarito correto.</div>
-          ) : null}
 
           <AnswerCardImportPanel key={selectedVersion.id} onImported={applyCardScan} version={selectedVersion} />
 

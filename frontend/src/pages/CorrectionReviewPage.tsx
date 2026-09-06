@@ -73,7 +73,7 @@ export function CorrectionReviewPage() {
     return pendingCorrections.filter((correction) => (
       (versionFilter === "ALL" || correction.examVersionId === versionFilter)
       && (classFilter === "ALL" || (correction.classGroup || "Sem turma") === classFilter)
-      && (!normalizedQuery || [correction.studentName, correction.studentIdentifier || "", correction.examTitle, correction.classGroup || ""]
+      && (!normalizedQuery || [correction.examTitle, correction.classGroup || ""]
         .some((value) => normalizeSearch(value).includes(normalizedQuery)))
     ));
   }, [classFilter, pendingCorrections, query, versionFilter]);
@@ -153,7 +153,7 @@ export function CorrectionReviewPage() {
     }
     if (!(await confirm({
       confirmLabel: "Confirmar correção",
-      description: `Confirmar a correção de ${selectedCorrection.studentName}? A nota passará a aparecer nos resultados.`,
+      description: `Confirmar esta correção da turma ${selectedCorrection.classGroup || "não informada"}? A nota passará a compor o desempenho da turma.`,
       title: "Confirmar correção"
     }))) {
       return;
@@ -166,7 +166,7 @@ export function CorrectionReviewPage() {
       setCorrections((current) => current.map((correction) => correction.id === confirmed.id ? confirmed : correction));
       setSelectedCorrectionId(null);
       setDraft(null);
-      setNotice(`A correção de ${confirmed.studentName} foi confirmada.`);
+      setNotice(`A correção da turma ${confirmed.classGroup || "não informada"} foi confirmada.`);
     } catch (requestError) {
       setError(getErrorMessage(requestError, "Não foi possível confirmar a correção."));
     } finally {
@@ -203,7 +203,7 @@ export function CorrectionReviewPage() {
             <label className="relative block">
               <span className="sr-only">Buscar revisão</span>
               <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3 text-slate-400" size={18} />
-              <input className="h-11 w-full border border-stone-300 bg-white pl-10 pr-3 text-sm outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" onChange={(event) => setQuery(event.target.value)} placeholder="Aluno, matrícula ou prova" type="search" value={query} />
+              <input className="h-11 w-full border border-stone-300 bg-white pl-10 pr-3 text-sm outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" onChange={(event) => setQuery(event.target.value)} placeholder="Turma ou prova" type="search" value={query} />
             </label>
             <select aria-label="Filtrar por prova e versão" className="h-11 border border-stone-300 bg-white px-3 text-sm text-slate-700 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" onChange={(event) => setVersionFilter(event.target.value)} value={versionFilter}>
               <option value="ALL">Todas as provas e versões</option>
@@ -253,11 +253,11 @@ function CorrectionQueue({ corrections, onSelect, selectedCorrectionId }: { corr
         <p className="mt-1 text-sm text-slate-500">{corrections.length} correção{corrections.length === 1 ? "" : "ões"} aguardando confirmação.</p>
       </div>
       <ol className="max-h-[34rem] divide-y divide-stone-200 overflow-auto">
-        {corrections.map((correction) => (
+        {corrections.map((correction, index) => (
           <li key={correction.id}>
             <button className={correction.id === selectedCorrectionId ? "w-full border-l-4 border-teal-700 bg-teal-50 px-4 py-4 text-left" : "w-full border-l-4 border-transparent px-4 py-4 text-left hover:bg-stone-50"} onClick={() => onSelect(correction.id)} type="button">
-              <span className="block truncate text-sm font-semibold text-slate-950">{correction.studentName}</span>
-              <span className="mt-1 block truncate text-xs text-slate-500">{correction.examTitle} · {correction.classGroup || "Sem turma"}</span>
+              <span className="block truncate text-sm font-semibold text-slate-950">{correction.classGroup || "Turma não informada"}</span>
+              <span className="mt-1 block truncate text-xs text-slate-500">{correction.examTitle} · Cartão {index + 1}</span>
               <span className="mt-2 block text-sm font-semibold text-amber-800">{formatScore(correction.score)} / {formatScore(correction.totalScore)} · revisar</span>
             </button>
           </li>
@@ -284,8 +284,8 @@ function ReviewEditor({ answers, correction, hasUnsavedChanges, isSaving, onConf
       <div className="flex flex-col gap-3 border-b border-stone-200 pb-5 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase text-teal-800">Revisando correção</p>
-          <h2 className="mt-1 text-xl font-semibold text-slate-950">{correction.studentName}</h2>
-          <p className="mt-1 text-sm text-slate-500">{version.examTitle} · Versão {version.label} · {correction.classGroup || "Turma não informada"}</p>
+          <h2 className="mt-1 text-xl font-semibold text-slate-950">{correction.classGroup || "Turma não informada"}</h2>
+          <p className="mt-1 text-sm text-slate-500">{version.examTitle} · Versão {version.label}</p>
         </div>
         <div className="border border-stone-200 bg-white px-4 py-3 shadow-panel">
           <p className="text-xs font-medium text-slate-500">Nota atual</p>
@@ -302,7 +302,7 @@ function ReviewEditor({ answers, correction, hasUnsavedChanges, isSaving, onConf
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase text-slate-500">Questão {question.position}</p>
-                  <p className="mt-1 text-sm font-medium text-slate-900">Marcação do aluno</p>
+                  <p className="mt-1 text-sm font-medium text-slate-900">Marcação do cartão</p>
                 </div>
                 <div className="flex flex-wrap gap-2" role="group" aria-label={`Resposta da questão ${question.position}`}>
                   {question.alternatives.map((alternative) => {

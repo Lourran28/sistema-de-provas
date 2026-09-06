@@ -316,7 +316,7 @@ export function QuestionFormModal({ contents, onClose, onCreateSubject, onSave, 
             Cancelar
           </Button>
           <Button disabled={isSubmitting || isProcessingImage} icon={Save} type="submit">
-            {isSubmitting ? "Salvando..." : "Salvar questão"}
+            {isSubmitting ? "Salvando..." : question ? "Salvar alterações" : "Salvar questão"}
           </Button>
         </footer>
       </form>

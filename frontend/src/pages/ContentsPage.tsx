@@ -162,7 +162,7 @@ export function ContentsPage() {
           <input
             className="h-11 w-full rounded-lg border border-stone-300 bg-white pl-10 pr-3 text-sm outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Pesquisar por título, assunto ou tema"
+            placeholder="Pesquisar por título ou tema"
             type="search"
             value={search}
           />
@@ -181,12 +181,12 @@ export function ContentsPage() {
           ))}
         </select>
         <select
-          aria-label="Filtrar por assunto"
+          aria-label="Filtrar por tema"
           className="h-11 rounded-lg border border-stone-300 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
           onChange={(event) => setTopic(event.target.value)}
           value={topic}
         >
-          <option value="">Todos os assuntos</option>
+          <option value="">Todos os temas</option>
           {topics.map((option) => (
             <option key={option} value={option}>
               {option}
@@ -251,7 +251,6 @@ export function ContentsPage() {
           onCreateSubject={createAndSelectSubject}
           onSave={saveContent}
           subjects={subjects}
-          topics={topics}
         />
       ) : null}
 
@@ -301,7 +300,7 @@ function ContentTable({ contents, isLoading, onEdit, onRemove, subjects }: Conte
             <tr>
               <th className="px-5 py-3">Conteúdo</th>
               <th className="px-5 py-3">Disciplina</th>
-              <th className="px-5 py-3">Assunto</th>
+              <th className="px-5 py-3">Tema</th>
               <th className="px-5 py-3">Atualizado</th>
               <th className="w-28 px-5 py-3 text-right">Ações</th>
             </tr>
@@ -326,13 +325,13 @@ function ContentTable({ contents, isLoading, onEdit, onRemove, subjects }: Conte
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h2 className="truncate text-sm font-semibold text-slate-900">{content.title}</h2>
-                <p className="mt-1 text-sm text-slate-500">{content.topic}</p>
+                <p className="mt-1 text-sm text-slate-500">{content.theme || content.topic}</p>
               </div>
               <ContentActions content={content} onEdit={onEdit} onRemove={onRemove} />
             </div>
             <div className="flex flex-wrap gap-2 text-xs text-slate-600">
               <span className="rounded-md bg-stone-100 px-2 py-1">{content.subjectId ? subjectNames.get(content.subjectId) ?? "Disciplina removida" : "Sem disciplina"}</span>
-              {content.theme ? <span className="rounded-md bg-teal-50 px-2 py-1 text-teal-800">{content.theme}</span> : null}
+              <span className="rounded-md bg-teal-50 px-2 py-1 text-teal-800">{content.theme || content.topic}</span>
             </div>
           </article>
         ))}
@@ -353,10 +352,10 @@ function ContentRow({ content, onEdit, onRemove, subjectName }: ContentRowProps)
     <tr className="text-sm text-slate-700">
       <td className="max-w-md px-5 py-4">
         <p className="truncate font-semibold text-slate-900">{content.title}</p>
-        {content.theme ? <p className="mt-1 truncate text-slate-500">{content.theme}</p> : null}
+        <p className="mt-1 truncate text-slate-500">{content.theme || content.topic}</p>
       </td>
       <td className="px-5 py-4 text-slate-600">{subjectName ?? (content.subjectId ? "Disciplina removida" : "Sem disciplina")}</td>
-      <td className="px-5 py-4 text-slate-600">{content.topic}</td>
+      <td className="px-5 py-4 text-slate-600">{content.theme || content.topic}</td>
       <td className="whitespace-nowrap px-5 py-4 text-slate-500">{formatDate(content.updatedAt)}</td>
       <td className="px-5 py-4">
         <ContentActions content={content} onEdit={onEdit} onRemove={onRemove} />

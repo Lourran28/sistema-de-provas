@@ -2,7 +2,6 @@ import {
   BarChart3,
   BookOpen,
   ClipboardCheck,
-  FileText,
   FilePlus2,
   Files,
   GraduationCap,
@@ -30,14 +29,14 @@ const navigation = [
   { to: "/criar-prova", label: "Montar manualmente", icon: FilePlus2 },
   { to: "/gerar-prova", label: "Gerar por conteúdo", icon: ClipboardCheck },
   { to: "/conteudos", label: "Meus Conteúdos", icon: LibraryBig },
-  { to: "/alunos", label: "Turmas", icon: School },
+  { to: "/turmas", label: "Turmas", icon: School },
   { to: "/questoes", label: "Banco de Questões", icon: BookOpen },
   { to: "/correcao", label: "Correção", icon: ScanLine },
   { to: "/correcao-em-lote", label: "Correção em lote", icon: Files },
   { to: "/revisar-correcoes", label: "Revisões pendentes", icon: ListChecks },
   { to: "/gabaritos", label: "Gabaritos", icon: KeyRound },
-  { to: "/resultados", label: "Resultados", icon: BarChart3 },
-  { to: "/boletins", label: "Boletins", icon: FileText },
+  { to: "/resultados", label: "Desempenho", icon: BarChart3 },
+  { to: "/boletins", label: "Visão das turmas", icon: School },
   { to: "/perfil", label: "Perfil", icon: UserRound }
 ];
 

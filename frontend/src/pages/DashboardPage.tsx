@@ -193,7 +193,7 @@ function StatusBadge({ status }: { status: ExamStatus }) {
 function buildActivities(exams: Exam[], corrections: Correction[]): Activity[] {
   return [
     ...exams.map((exam) => ({ description: `Prova “${exam.title}” atualizada`, occurredAt: exam.updatedAt, to: `/provas/${exam.id}`, type: "exam" as const })),
-    ...corrections.map((correction) => ({ description: `Correção de ${correction.studentName} ${correction.status === "CONFIRMED" ? "confirmada" : "salva para revisão"}`, occurredAt: correction.reviewedAt || correction.createdAt, to: "/resultados", type: "correction" as const }))
+    ...corrections.map((correction) => ({ description: `Correção da turma ${correction.classGroup || "não informada"} ${correction.status === "CONFIRMED" ? "confirmada" : "salva para revisão"}`, occurredAt: correction.reviewedAt || correction.createdAt, to: "/resultados", type: "correction" as const }))
   ].sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime()).slice(0, 5);
 }
 

@@ -8,8 +8,8 @@ export function CorrectionDetails({ correction }: { correction: Correction }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase text-teal-800">Correção selecionada</p>
-          <h2 className="mt-1 text-lg font-semibold text-slate-950">{correction.studentName}</h2>
-          <p className="mt-1 text-sm text-slate-500">{correction.examTitle} · Versão {correction.versionLabel} · {correction.classGroup || "Turma não informada"}</p>
+          <h2 className="mt-1 text-lg font-semibold text-slate-950">{correction.classGroup || "Turma não informada"}</h2>
+          <p className="mt-1 text-sm text-slate-500">{correction.examTitle} · Versão {correction.versionLabel}</p>
         </div>
         <span className={correction.status === "CONFIRMED" ? "inline-flex items-center gap-2 text-sm font-semibold text-emerald-700" : "inline-flex items-center gap-2 text-sm font-semibold text-amber-700"}>
           <ClipboardCheck aria-hidden="true" size={18} />

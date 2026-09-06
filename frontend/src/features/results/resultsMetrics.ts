@@ -3,14 +3,14 @@ import type { Correction } from "../../types/corrections";
 export type CorrectionFilters = {
   classGroup: string;
   status: "ALL" | "CONFIRMED" | "NEEDS_REVIEW";
-  studentQuery: string;
   versionId: string;
 };
 
 export type ResultsSummary = {
   averagePercentage: number | null;
-  averageScore: number | null;
+  classCount: number;
   confirmedCount: number;
+  improvingClassCount: number;
   pendingCount: number;
 };
 
@@ -25,199 +25,107 @@ export type QuestionPerformance = {
 export type ClassPerformance = {
   averagePercentage: number;
   averageScore: number;
+  bestPercentage: number;
+  blankCount: number;
   classGroup: string;
   confirmedCount: number;
-};
-
-export type StudentPerformance = {
-  averagePercentage: number;
-  averageScore: number;
-  classGroup: string;
-  confirmedCount: number;
-  id: string;
-  name: string;
-  studentIdentifier: string | null;
-};
-
-export type StudentReport = StudentPerformance & {
+  correctCount: number;
   corrections: Correction[];
+  pendingCount: number;
+  trend: "DOWN" | "STABLE" | "UP";
+  trendPercentage: number;
+  wrongCount: number;
 };
 
-export const allFilters: CorrectionFilters = {
-  classGroup: "ALL",
-  status: "ALL",
-  studentQuery: "",
-  versionId: "ALL"
-};
+export const allFilters: CorrectionFilters = { classGroup: "ALL", status: "ALL", versionId: "ALL" };
 
 export function filterCorrections(corrections: Correction[], filters: CorrectionFilters) {
   return corrections.filter((correction) => (
     (filters.status === "ALL" || correction.status === filters.status)
     && (filters.versionId === "ALL" || correction.examVersionId === filters.versionId)
-    && (filters.classGroup === "ALL" || (correction.classGroup || "Sem turma") === filters.classGroup)
-    && matchesStudentQuery(correction, filters.studentQuery)
+    && (filters.classGroup === "ALL" || className(correction) === filters.classGroup)
   ));
 }
 
 export function summarizeCorrections(corrections: Correction[]): ResultsSummary {
+  const classes = getClassPerformance(corrections);
   const confirmed = corrections.filter((correction) => correction.status === "CONFIRMED");
-  const pendingCount = corrections.filter((correction) => correction.status === "NEEDS_REVIEW").length;
-  if (confirmed.length === 0) {
-    return { averagePercentage: null, averageScore: null, confirmedCount: 0, pendingCount };
-  }
   return {
-    averagePercentage: confirmed.reduce((total, correction) => total + (correction.totalScore ? correction.score / correction.totalScore : 0), 0) / confirmed.length * 100,
-    averageScore: confirmed.reduce((total, correction) => total + correction.score, 0) / confirmed.length,
+    averagePercentage: confirmed.length ? average(confirmed.map(percentageForCorrection)) : null,
+    classCount: new Set(corrections.map(className)).size,
     confirmedCount: confirmed.length,
-    pendingCount
+    improvingClassCount: classes.filter((item) => item.trend === "UP").length,
+    pendingCount: corrections.filter((correction) => correction.status === "NEEDS_REVIEW").length
   };
 }
 
 export function getQuestionPerformance(corrections: Correction[], versionId: string): QuestionPerformance[] {
-  if (versionId === "ALL") {
-    return [];
-  }
+  if (versionId === "ALL") return [];
   const byPosition = new Map<number, { correctCount: number; incorrectCount: number; reviewedCount: number }>();
   for (const correction of corrections) {
-    if (correction.status !== "CONFIRMED" || correction.examVersionId !== versionId) {
-      continue;
-    }
+    if (correction.status !== "CONFIRMED" || correction.examVersionId !== versionId) continue;
     for (const answer of correction.answers) {
       const current = byPosition.get(answer.questionPosition) ?? { correctCount: 0, incorrectCount: 0, reviewedCount: 0 };
-      if (answer.correct === true) {
-        current.correctCount += 1;
-      } else if (answer.correct === false) {
-        current.incorrectCount += 1;
-      } else {
-        current.reviewedCount += 1;
-      }
+      if (answer.correct === true) current.correctCount += 1;
+      else if (answer.correct === false) current.incorrectCount += 1;
+      else current.reviewedCount += 1;
       byPosition.set(answer.questionPosition, current);
     }
   }
-  return [...byPosition.entries()]
-    .map(([position, result]) => {
-      const evaluated = result.correctCount + result.incorrectCount;
-      return {
-        position,
-        ...result,
-        successRate: evaluated ? result.correctCount / evaluated * 100 : null
-      };
-    })
-    .sort((left, right) => (left.successRate ?? 101) - (right.successRate ?? 101) || left.position - right.position);
+  return [...byPosition.entries()].map(([position, result]) => {
+    const evaluated = result.correctCount + result.incorrectCount;
+    return { position, ...result, successRate: evaluated ? result.correctCount / evaluated * 100 : null };
+  }).sort((left, right) => (left.successRate ?? 101) - (right.successRate ?? 101) || left.position - right.position);
 }
 
 export function getClassPerformance(corrections: Correction[]): ClassPerformance[] {
   const groups = new Map<string, Correction[]>();
-  for (const correction of confirmedCorrections(corrections)) {
-    const classGroup = correction.classGroup || "Sem turma";
-    groups.set(classGroup, [...(groups.get(classGroup) ?? []), correction]);
+  for (const correction of corrections) {
+    const name = className(correction);
+    groups.set(name, [...(groups.get(name) ?? []), correction]);
   }
-  return [...groups.entries()]
-    .map(([classGroup, groupCorrections]) => ({
+  return [...groups.entries()].map(([classGroup, allCorrections]) => {
+    const confirmed = allCorrections.filter((item) => item.status === "CONFIRMED").sort((a, b) => correctionDate(a).localeCompare(correctionDate(b)));
+    const percentages = confirmed.map(percentageForCorrection);
+    const split = Math.max(1, Math.floor(percentages.length / 2));
+    const earlier = percentages.slice(0, split);
+    const recent = percentages.slice(split);
+    const trendPercentage = recent.length ? average(recent) - average(earlier) : 0;
+    const trend: ClassPerformance["trend"] = trendPercentage > 1 ? "UP" : trendPercentage < -1 ? "DOWN" : "STABLE";
+    return {
+      averagePercentage: percentages.length ? average(percentages) : 0,
+      averageScore: confirmed.length ? average(confirmed.map((item) => item.score)) : 0,
+      bestPercentage: percentages.length ? Math.max(...percentages) : 0,
+      blankCount: confirmed.reduce((sum, item) => sum + item.blankCount, 0),
       classGroup,
-      ...summarizePerformance(groupCorrections)
-    }))
-    .sort((left, right) => left.averagePercentage - right.averagePercentage || left.classGroup.localeCompare(right.classGroup, "pt-BR"));
+      confirmedCount: confirmed.length,
+      correctCount: confirmed.reduce((sum, item) => sum + item.correctCount, 0),
+      corrections: [...confirmed].reverse(),
+      pendingCount: allCorrections.filter((item) => item.status === "NEEDS_REVIEW").length,
+      trend,
+      trendPercentage,
+      wrongCount: confirmed.reduce((sum, item) => sum + item.wrongCount, 0)
+    };
+  }).sort((left, right) => right.averagePercentage - left.averagePercentage || left.classGroup.localeCompare(right.classGroup, "pt-BR"));
 }
 
-export function getStudentPerformance(corrections: Correction[]): StudentPerformance[] {
-  return getStudentReports(corrections)
-    .map(({ corrections: _corrections, ...student }) => student)
-    .sort((left, right) => left.averagePercentage - right.averagePercentage || left.name.localeCompare(right.name, "pt-BR"));
-}
-
-export function getStudentReports(corrections: Correction[]): StudentReport[] {
-  const groups = new Map<string, Correction[]>();
-  for (const correction of confirmedCorrections(corrections)) {
-    const key = studentKey(correction);
-    groups.set(key, [...(groups.get(key) ?? []), correction]);
-  }
-  return [...groups.entries()]
-    .map(([id, studentCorrections]) => {
-      const history = [...studentCorrections].sort((left, right) => correctionDate(right).localeCompare(correctionDate(left)));
-      const latestCorrection = history[0];
-      return {
-        id,
-        name: latestCorrection.studentName,
-        studentIdentifier: latestCorrection.studentIdentifier,
-        classGroup: latestCorrection.classGroup || "Sem turma",
-        ...summarizePerformance(history),
-        corrections: history
-      };
-    })
-    .sort((left, right) => left.name.localeCompare(right.name, "pt-BR") || left.classGroup.localeCompare(right.classGroup, "pt-BR"));
-}
-
-export function downloadCorrectionsCsv(corrections: Correction[]) {
+export function downloadClassPerformanceCsv(corrections: Correction[]) {
   const rows = [
-    ["Aluno", "Matrícula", "Turma", "Prova", "Versão", "Acertos", "Erros", "Em branco", "Nota", "Valor total", "Status", "Data da correção"],
-    ...corrections.map((correction) => [
-      correction.studentName,
-      correction.studentIdentifier || "",
-      correction.classGroup || "",
-      correction.examTitle,
-      correction.versionLabel,
-      String(correction.correctCount),
-      String(correction.wrongCount),
-      String(correction.blankCount),
-      String(correction.score).replace(".", ","),
-      String(correction.totalScore).replace(".", ","),
-      correction.status === "CONFIRMED" ? "Confirmada" : "Revisão necessária",
-      formatCsvDate(correction.reviewedAt || correction.createdAt)
-    ])
+    ["Turma", "Correções confirmadas", "Pendentes", "Média", "Aproveitamento", "Melhor resultado", "Acertos", "Erros", "Em branco", "Variação"],
+    ...getClassPerformance(corrections).map((item) => [item.classGroup, String(item.confirmedCount), String(item.pendingCount), decimal(item.averageScore), decimal(item.averagePercentage), decimal(item.bestPercentage), String(item.correctCount), String(item.wrongCount), String(item.blankCount), decimal(item.trendPercentage)])
   ];
   const csv = `\uFEFF${rows.map((row) => row.map(escapeCsvCell).join(";")).join("\r\n")}`;
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = "resultados-das-provas.csv";
+  anchor.download = "desempenho-das-turmas.csv";
   anchor.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-function escapeCsvCell(value: string) {
-  return `"${value.replaceAll("\"", "\"\"")}"`;
-}
-
-function formatCsvDate(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
-}
-
-function confirmedCorrections(corrections: Correction[]) {
-  return corrections.filter((correction) => correction.status === "CONFIRMED");
-}
-
-function summarizePerformance(corrections: Correction[]) {
-  return {
-    confirmedCount: corrections.length,
-    averageScore: corrections.reduce((total, correction) => total + correction.score, 0) / corrections.length,
-    averagePercentage: corrections.reduce((total, correction) => total + percentageForCorrection(correction), 0) / corrections.length
-  };
-}
-
-function matchesStudentQuery(correction: Correction, query: string) {
-  const normalizedQuery = normalizeSearchValue(query);
-  if (!normalizedQuery) {
-    return true;
-  }
-  return [correction.studentName, correction.studentIdentifier || "", correction.classGroup || ""]
-    .some((value) => normalizeSearchValue(value).includes(normalizedQuery));
-}
-
-function percentageForCorrection(correction: Correction) {
-  return correction.totalScore ? correction.score / correction.totalScore * 100 : 0;
-}
-
-function studentKey(correction: Correction) {
-  return correction.studentId
-    ? `student:${correction.studentId}`
-    : `manual:${normalizeSearchValue(correction.studentName)}:${normalizeSearchValue(correction.studentIdentifier || "")}:${normalizeSearchValue(correction.classGroup || "")}`;
-}
-
-function correctionDate(correction: Correction) {
-  return correction.reviewedAt || correction.createdAt;
-}
-
-function normalizeSearchValue(value: string) {
-  return value.normalize("NFD").replaceAll(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
-}
+function className(correction: Correction) { return correction.classGroup?.trim() || "Turma não informada"; }
+function percentageForCorrection(correction: Correction) { return correction.totalScore ? correction.score / correction.totalScore * 100 : 0; }
+function correctionDate(correction: Correction) { return correction.reviewedAt || correction.createdAt; }
+function average(values: number[]) { return values.reduce((sum, value) => sum + value, 0) / values.length; }
+function decimal(value: number) { return value.toFixed(2).replace(".", ","); }
+function escapeCsvCell(value: string) { return `"${value.replaceAll("\"", "\"\"")}"`; }

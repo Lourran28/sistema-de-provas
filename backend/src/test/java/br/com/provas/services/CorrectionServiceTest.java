@@ -107,6 +107,24 @@ class CorrectionServiceTest {
     }
 
     @Test
+    void createsClassCorrectionWithoutARegisteredStudent() {
+        Fixture fixture = configureFixture();
+
+        CorrectionResponse response = correctionService.create(fixture.teacherId(), new CorrectionRequest(
+                fixture.version().getId(),
+                null,
+                null,
+                null,
+                "  8º   A  ",
+                List.of(
+                        new CorrectionAnswerRequest(fixture.firstVersionQuestion().getId(), fixture.firstCorrectAlternative().getId(), StudentAnswerStatus.DETECTED),
+                        new CorrectionAnswerRequest(fixture.secondVersionQuestion().getId(), null, StudentAnswerStatus.BLANK))));
+
+        assertEquals("Registro da turma", response.studentName());
+        assertEquals("8º A", response.classGroup());
+    }
+
+    @Test
     void rejectsAlternativeThatDoesNotBelongToTheVersionQuestion() {
         Fixture fixture = configureFixture();
         AlternativeEntity invalidAlternative = new AlternativeEntity(UUID.randomUUID(), "Alternativa externa", 1, false);

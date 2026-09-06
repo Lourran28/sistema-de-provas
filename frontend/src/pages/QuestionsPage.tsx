@@ -88,9 +88,15 @@ export function QuestionsPage() {
 
   async function saveQuestion(input: QuestionInput) {
     if (editingQuestion) {
-      await updateQuestion(editingQuestion.id, input);
+      const updated = await updateQuestion(editingQuestion.id, input);
+      setQuestionPage((current) => ({
+        ...current,
+        items: current.items.map((question) => question.id === updated.id ? updated : question)
+      }));
+      setNotice("Questão atualizada com sucesso.");
     } else {
       await createQuestion(input);
+      setNotice("Questão criada com sucesso.");
     }
     await loadQuestions();
   }
@@ -145,11 +151,13 @@ export function QuestionsPage() {
   }
 
   function openNewQuestion() {
+    setNotice("");
     setEditingQuestion(undefined);
     setIsQuestionModalOpen(true);
   }
 
   function openEditQuestion(question: Question) {
+    setNotice("");
     setEditingQuestion(question);
     setIsQuestionModalOpen(true);
   }
