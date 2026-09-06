@@ -35,6 +35,7 @@ import br.com.provas.entities.SubjectEntity;
 import br.com.provas.exceptions.NotFoundException;
 import br.com.provas.repositories.AlternativeRepository;
 import br.com.provas.repositories.ExamQuestionRepository;
+import br.com.provas.repositories.ExamVersionQuestionRepository;
 import br.com.provas.repositories.QuestionContentRepository;
 import br.com.provas.repositories.QuestionRepository;
 import br.com.provas.services.generation.GeneratedQuestionDraft;
@@ -48,6 +49,7 @@ public class QuestionService {
     private final AlternativeRepository alternativeRepository;
     private final QuestionContentRepository questionContentRepository;
     private final ExamQuestionRepository examQuestionRepository;
+    private final ExamVersionQuestionRepository examVersionQuestionRepository;
     private final SubjectService subjectService;
     private final ContentService contentService;
 
@@ -56,12 +58,14 @@ public class QuestionService {
             AlternativeRepository alternativeRepository,
             QuestionContentRepository questionContentRepository,
             ExamQuestionRepository examQuestionRepository,
+            ExamVersionQuestionRepository examVersionQuestionRepository,
             SubjectService subjectService,
             ContentService contentService) {
         this.questionRepository = questionRepository;
         this.alternativeRepository = alternativeRepository;
         this.questionContentRepository = questionContentRepository;
         this.examQuestionRepository = examQuestionRepository;
+        this.examVersionQuestionRepository = examVersionQuestionRepository;
         this.subjectService = subjectService;
         this.contentService = contentService;
     }
@@ -133,7 +137,7 @@ public class QuestionService {
         QuestionEntity question = findEntity(teacherId, questionId);
         ResolvedQuestionData data = resolveRequest(teacherId, request);
 
-        if (examQuestionRepository.existsByQuestionId(questionId)) {
+        if (examVersionQuestionRepository.existsByOriginalQuestionId(questionId)) {
             question.archive();
             questionRepository.save(question);
 

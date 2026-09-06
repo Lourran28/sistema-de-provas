@@ -9,5 +9,7 @@ import br.com.provas.entities.ExamVersionQuestionEntity;
 
 public interface ExamVersionQuestionRepository extends JpaRepository<ExamVersionQuestionEntity, UUID> {
 
+    boolean existsByOriginalQuestionId(UUID originalQuestionId);
+
     List<ExamVersionQuestionEntity> findAllByExamVersionIdOrderByPositionAsc(UUID examVersionId);
 }

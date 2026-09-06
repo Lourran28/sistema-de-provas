@@ -31,6 +31,7 @@ import br.com.provas.entities.QuestionType;
 import br.com.provas.exceptions.NotFoundException;
 import br.com.provas.repositories.AlternativeRepository;
 import br.com.provas.repositories.ExamQuestionRepository;
+import br.com.provas.repositories.ExamVersionQuestionRepository;
 import br.com.provas.repositories.QuestionContentRepository;
 import br.com.provas.repositories.QuestionRepository;
 
@@ -48,6 +49,9 @@ class QuestionServiceTest {
 
     @Mock
     private ExamQuestionRepository examQuestionRepository;
+
+    @Mock
+    private ExamVersionQuestionRepository examVersionQuestionRepository;
 
     @Mock
     private SubjectService subjectService;
@@ -104,7 +108,7 @@ class QuestionServiceTest {
     }
 
     @Test
-    void createsARevisionWhenUpdatingAQuestionAlreadyUsedInAnExam() {
+    void createsARevisionWhenUpdatingAQuestionAlreadyUsedInAnOfficialVersion() {
         UUID teacherId = UUID.randomUUID();
         QuestionEntity original = question(teacherId);
         AtomicReference<QuestionEntity> revision = new AtomicReference<>();
@@ -125,7 +129,7 @@ class QuestionServiceTest {
                             ? Optional.of(currentRevision)
                             : Optional.empty();
                 });
-        when(examQuestionRepository.existsByQuestionId(original.getId())).thenReturn(true);
+        when(examVersionQuestionRepository.existsByOriginalQuestionId(original.getId())).thenReturn(true);
         when(questionRepository.save(any(QuestionEntity.class))).thenAnswer(invocation -> {
             QuestionEntity saved = invocation.getArgument(0);
             if (!saved.getId().equals(original.getId())) {
