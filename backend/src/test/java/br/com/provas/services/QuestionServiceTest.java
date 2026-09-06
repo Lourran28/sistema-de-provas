@@ -1,6 +1,7 @@
 package br.com.provas.services;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -8,7 +9,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,8 +22,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import br.com.provas.dtos.questions.AlternativeRequest;
 import br.com.provas.dtos.questions.QuestionClearResponse;
 import br.com.provas.dtos.questions.QuestionRequest;
+import br.com.provas.dtos.questions.QuestionResponse;
+import br.com.provas.entities.AlternativeEntity;
 import br.com.provas.entities.QuestionDifficulty;
 import br.com.provas.entities.QuestionEntity;
+import br.com.provas.entities.QuestionStatus;
 import br.com.provas.entities.QuestionType;
 import br.com.provas.exceptions.NotFoundException;
 import br.com.provas.repositories.AlternativeRepository;
@@ -95,6 +101,56 @@ class QuestionServiceTest {
         verify(questionContentRepository).deleteByIdQuestionId(unusedQuestion.getId());
         verify(questionRepository).delete(unusedQuestion);
         verify(questionRepository).save(usedQuestion);
+    }
+
+    @Test
+    void createsARevisionWhenUpdatingAQuestionAlreadyUsedInAnExam() {
+        UUID teacherId = UUID.randomUUID();
+        QuestionEntity original = question(teacherId);
+        AtomicReference<QuestionEntity> revision = new AtomicReference<>();
+        AtomicReference<List<AlternativeEntity>> savedAlternatives = new AtomicReference<>(List.of());
+
+        when(questionRepository.findByIdAndTeacherId(any(UUID.class), any(UUID.class)))
+                .thenAnswer(invocation -> {
+                    UUID requestedId = invocation.getArgument(0);
+                    UUID requestedTeacherId = invocation.getArgument(1);
+                    if (!teacherId.equals(requestedTeacherId)) {
+                        return Optional.empty();
+                    }
+                    if (original.getId().equals(requestedId)) {
+                        return Optional.of(original);
+                    }
+                    QuestionEntity currentRevision = revision.get();
+                    return currentRevision != null && currentRevision.getId().equals(requestedId)
+                            ? Optional.of(currentRevision)
+                            : Optional.empty();
+                });
+        when(examQuestionRepository.existsByQuestionId(original.getId())).thenReturn(true);
+        when(questionRepository.save(any(QuestionEntity.class))).thenAnswer(invocation -> {
+            QuestionEntity saved = invocation.getArgument(0);
+            if (!saved.getId().equals(original.getId())) {
+                revision.set(saved);
+            }
+            return saved;
+        });
+        when(alternativeRepository.saveAll(any())).thenAnswer(invocation -> {
+            List<AlternativeEntity> saved = invocation.getArgument(0);
+            savedAlternatives.set(saved);
+            return saved;
+        });
+        when(alternativeRepository.findAllByQuestionIdOrderByPositionAsc(any(UUID.class)))
+                .thenAnswer(invocation -> savedAlternatives.get());
+        when(questionContentRepository.findAllByIdQuestionIdIn(any())).thenReturn(List.of());
+
+        QuestionResponse response = questionService.update(teacherId, original.getId(), request(null, 1));
+
+        assertEquals(QuestionStatus.ARCHIVED, original.getStatus());
+        assertNotEquals(original.getId(), response.id());
+        assertEquals(QuestionStatus.ACTIVE, response.status());
+        assertEquals(2, response.alternatives().size());
+        assertEquals(true, response.alternatives().get(1).correct());
+        verify(alternativeRepository, never()).deleteByQuestionId(original.getId());
+        verify(questionContentRepository, never()).deleteByIdQuestionId(original.getId());
     }
 
     private QuestionEntity question(UUID teacherId) {

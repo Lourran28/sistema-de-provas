@@ -132,6 +132,23 @@ public class QuestionService {
     public QuestionResponse update(UUID teacherId, UUID questionId, QuestionRequest request) {
         QuestionEntity question = findEntity(teacherId, questionId);
         ResolvedQuestionData data = resolveRequest(teacherId, request);
+
+        if (examQuestionRepository.existsByQuestionId(questionId)) {
+            question.archive();
+            questionRepository.save(question);
+
+            QuestionEntity revision = questionRepository.save(new QuestionEntity(
+                    teacherId,
+                    data.subjectId(),
+                    normalizeStatement(request.statement()),
+                    request.questionType(),
+                    request.difficulty(),
+                    question.getSourceType(),
+                    normalizeImageUrl(request.imageUrl())));
+            replaceDetails(revision.getId(), data.contentId(), request);
+            return get(teacherId, revision.getId());
+        }
+
         question.update(
                 data.subjectId(),
                 normalizeStatement(request.statement()),

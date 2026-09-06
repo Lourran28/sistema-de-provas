@@ -91,7 +91,7 @@ export function QuestionsPage() {
       const updated = await updateQuestion(editingQuestion.id, input);
       setQuestionPage((current) => ({
         ...current,
-        items: current.items.map((question) => question.id === updated.id ? updated : question)
+        items: current.items.map((question) => question.id === editingQuestion.id ? updated : question)
       }));
       setNotice("Questão atualizada com sucesso.");
     } else {
