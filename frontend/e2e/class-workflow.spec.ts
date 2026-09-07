@@ -27,9 +27,9 @@ test("correction asks only for the class", async ({ page }) => {
 test("content form has the requested fields and file import", async ({ page }, testInfo) => {
   await authenticate(page);
   await page.route("**/api/subjects", (route) => route.fulfill({ json: [subject] }));
-  await page.route("**/api/contents/topics", (route) => route.fulfill({ json: [] }));
   await page.route(/\/api\/contents(?:\?.*)?$/, (route) => route.fulfill({ json: { items: [], page: { number: 0, size: 12, totalElements: 0, totalPages: 0 } } }));
   await page.goto("/conteudos");
+  await expect(page.getByLabel("Filtrar por tema")).toHaveCount(0);
   await page.getByRole("button", { name: "Novo conteúdo" }).click();
   await expect(page.locator("#content-subject")).toBeVisible();
   await expect(page.locator("#content-theme")).toBeVisible();

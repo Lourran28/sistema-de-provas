@@ -6,7 +6,7 @@ import { Card } from "../components/ui/Card";
 import { useConfirmation } from "../components/ui/confirmationContext";
 import { ContentFormModal } from "../features/contents/ContentFormModal";
 import { SubjectManagerModal } from "../features/contents/SubjectManagerModal";
-import { getContentTopics, getContents, createContent, deleteContent, updateContent } from "../services/contentService";
+import { getContents, createContent, deleteContent, updateContent } from "../services/contentService";
 import { createSubject, getSubjects } from "../services/subjectService";
 import { ApiRequestError } from "../services/httpClient";
 import type { Content, ContentFilters, ContentInput, ContentPage, Subject } from "../types/contents";
@@ -19,12 +19,10 @@ const initialPage: ContentPage = {
 export function ContentsPage() {
   const { confirm } = useConfirmation();
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [topics, setTopics] = useState<string[]>([]);
   const [contentPage, setContentPage] = useState<ContentPage>(initialPage);
   const [filters, setFilters] = useState<ContentFilters>({});
   const [search, setSearch] = useState("");
   const [subjectId, setSubjectId] = useState("");
-  const [topic, setTopic] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [editingContent, setEditingContent] = useState<Content | undefined>();
@@ -40,9 +38,7 @@ export function ContentsPage() {
     setIsLoading(true);
     setError("");
     try {
-      const [nextContentPage, nextTopics] = await Promise.all([getContents(filters), getContentTopics()]);
-      setContentPage(nextContentPage);
-      setTopics(nextTopics);
+      setContentPage(await getContents(filters));
     } catch (requestError) {
       setError(getErrorMessage(requestError, "Não foi possível carregar seus conteúdos."));
     } finally {
@@ -69,7 +65,6 @@ export function ContentsPage() {
     setFilters({
       search: search.trim() || undefined,
       subjectId: subjectId || undefined,
-      topic: topic || undefined,
       page: 0,
       size: 12
     });
@@ -78,7 +73,6 @@ export function ContentsPage() {
   function clearFilters() {
     setSearch("");
     setSubjectId("");
-    setTopic("");
     setFilters({ page: 0, size: 12 });
   }
 
@@ -155,7 +149,7 @@ export function ContentsPage() {
         </div>
       </section>
 
-      <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_200px_auto_auto]" onSubmit={applyFilters}>
+      <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_auto_auto]" onSubmit={applyFilters}>
         <label className="relative block">
           <span className="sr-only">Pesquisar conteúdo</span>
           <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3 text-slate-400" size={18} />
@@ -177,19 +171,6 @@ export function ContentsPage() {
           {subjects.map((subject) => (
             <option key={subject.id} value={subject.id}>
               {subject.name}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Filtrar por tema"
-          className="h-11 rounded-lg border border-stone-300 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
-          onChange={(event) => setTopic(event.target.value)}
-          value={topic}
-        >
-          <option value="">Todos os temas</option>
-          {topics.map((option) => (
-            <option key={option} value={option}>
-              {option}
             </option>
           ))}
         </select>
