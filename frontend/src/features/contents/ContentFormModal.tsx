@@ -53,8 +53,12 @@ export function ContentFormModal({ content, onClose, onCreateSubject, onSave, su
     try {
       if (file.size > MAX_FILE_SIZE) throw new Error("O arquivo deve ter no máximo 10 MB.");
       const extension = file.name.split(".").pop()?.toLocaleLowerCase("pt-BR");
-      const text = extension === "pptx" ? await extractPptxText(file) : await file.text();
-      if (!text.trim()) throw new Error("Não foi encontrado texto neste arquivo.");
+      const text = await extractMaterialText(file, extension);
+      if (!text.trim()) {
+        throw new Error(extension === "pdf"
+          ? "Não foi encontrado texto no PDF. Se ele for escaneado, será necessário usar OCR."
+          : "Não foi encontrado texto neste arquivo.");
+      }
       if (text.length > 50000) throw new Error("O material possui mais de 50.000 caracteres. Reduza o conteúdo antes de importar.");
       setBody(text);
       setFileName(file.name);
@@ -83,7 +87,7 @@ export function ContentFormModal({ content, onClose, onCreateSubject, onSave, su
           <input className="mt-2 h-11 w-full rounded-lg border border-stone-300 px-3 text-slate-950 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id="content-title" maxLength={180} onChange={(event) => setTitle(event.target.value)} required value={title} />
         </label>
         <div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-medium text-slate-700">Material de referência</p><p className="mt-1 text-xs text-slate-500">Digite abaixo ou importe slides PPTX, texto, Markdown ou CSV.</p></div><label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:border-slate-400"><FileUp aria-hidden="true" size={18} />{isReadingFile ? "Lendo arquivo..." : "Importar arquivo"}<input accept=".pptx,.txt,.md,.csv,text/plain,text/markdown,text/csv,application/vnd.openxmlformats-officedocument.presentationml.presentation" className="sr-only" disabled={isReadingFile} onChange={importMaterial} type="file" /></label></div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-medium text-slate-700">Material de referência</p><p className="mt-1 text-xs text-slate-500">Digite abaixo ou importe PDF, slides PPTX, texto, Markdown ou CSV.</p></div><label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:border-slate-400"><FileUp aria-hidden="true" size={18} />{isReadingFile ? "Lendo arquivo..." : "Importar arquivo"}<input accept=".pdf,.pptx,.txt,.md,.csv,application/pdf,text/plain,text/markdown,text/csv,application/vnd.openxmlformats-officedocument.presentationml.presentation" className="sr-only" disabled={isReadingFile} onChange={importMaterial} type="file" /></label></div>
           {fileName ? <div className="mt-3 flex items-center justify-between border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-900"><span className="truncate">Texto importado de {fileName}</span><Button aria-label="Remover material importado" className="h-8 w-8 px-0" icon={X} onClick={() => { setBody(""); setFileName(""); }} title="Remover arquivo" type="button" variant="ghost" /></div> : null}
           <textarea className="mt-3 min-h-56 w-full resize-y rounded-lg border border-stone-300 px-3 py-3 leading-6 text-slate-950 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id="content-body" maxLength={50000} onChange={(event) => setBody(event.target.value)} placeholder="Digite ou cole o material que será usado para gerar as questões." required value={body} />
         </div>
@@ -91,6 +95,44 @@ export function ContentFormModal({ content, onClose, onCreateSubject, onSave, su
       <footer className="flex flex-wrap justify-end gap-3 px-5 py-4 sm:px-6"><Button disabled={isSubmitting} onClick={onClose} type="button" variant="secondary">Cancelar</Button><Button disabled={isSubmitting || isReadingFile} icon={Save} type="submit">{isSubmitting ? "Salvando..." : content ? "Salvar alterações" : "Salvar conteúdo"}</Button></footer>
     </form>
   </ModalDialog>;
+}
+
+async function extractMaterialText(file: File, extension?: string) {
+  if (extension === "pdf") return extractPdfText(file);
+  if (extension === "pptx") return extractPptxText(file);
+  if (["txt", "md", "csv"].includes(extension ?? "")) return file.text();
+  throw new Error("Formato não suportado. Envie PDF, PPTX, TXT, Markdown ou CSV.");
+}
+
+async function extractPdfText(file: File) {
+  try {
+    const [{ getDocument, GlobalWorkerOptions }, { default: workerSource }] = await Promise.all([
+      import("pdfjs-dist"),
+      import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
+    ]);
+    GlobalWorkerOptions.workerSrc = workerSource;
+    const loadingTask = getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+    const pdf = await loadingTask.promise;
+    const sections: string[] = [];
+
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent();
+      let pageText = "";
+      for (const item of content.items) {
+        if (!("str" in item)) continue;
+        pageText += item.str;
+        pageText += item.hasEOL ? "\n" : " ";
+      }
+      const normalizedText = pageText.replace(/[ \t]+\n/g, "\n").replace(/[ \t]{2,}/g, " ").trim();
+      if (normalizedText) sections.push(`Página ${pageNumber}\n${normalizedText}`);
+    }
+
+    await loadingTask.destroy();
+    return sections.join("\n\n");
+  } catch {
+    throw new Error("Não foi possível ler o PDF. Verifique se o arquivo não está protegido por senha ou corrompido.");
+  }
 }
 
 async function extractPptxText(file: File) {

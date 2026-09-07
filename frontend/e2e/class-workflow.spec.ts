@@ -34,7 +34,16 @@ test("content form has the requested fields and file import", async ({ page }, t
   await expect(page.locator("#content-subject")).toBeVisible();
   await expect(page.locator("#content-theme")).toBeVisible();
   await expect(page.locator("#content-title")).toBeVisible();
-  await expect(page.getByText("Importar arquivo")).toBeVisible();
+  await expect(page.getByText("PDF, slides PPTX")).toBeVisible();
+  const fileInput = page.locator('input[type="file"][accept*="application/pdf"]');
+  await expect(fileInput).toHaveCount(1);
+  await fileInput.setInputFiles({
+    name: "material.pdf",
+    mimeType: "application/pdf",
+    buffer: createTextPdf("Conteudo importado do PDF"),
+  });
+  await expect(page.locator("#content-body")).toHaveValue(/Conteudo importado do PDF/);
+  await expect(page.getByText("Texto importado de material.pdf")).toBeVisible();
   await expect(page.getByText("Assunto", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Observações", { exact: true })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("content-form.png"), fullPage: true });
@@ -76,3 +85,26 @@ test("question editing confirms the saved action", async ({ page }) => {
   await expect(page.getByRole("status")).toContainText("Questão atualizada com sucesso");
   expect(statement).toBe("Questão atualizada");
 });
+
+function createTextPdf(text: string) {
+  const escapedText = text.replaceAll("\\", "\\\\").replaceAll("(", "\\(").replaceAll(")", "\\)");
+  const stream = `BT\n/F1 18 Tf\n72 720 Td\n(${escapedText}) Tj\nET`;
+  const objects = [
+    "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj",
+    "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj",
+    "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>\nendobj",
+    `4 0 obj\n<< /Length ${Buffer.byteLength(stream, "ascii")} >>\nstream\n${stream}\nendstream\nendobj`,
+    "5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj",
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  for (const object of objects) {
+    offsets.push(Buffer.byteLength(pdf, "ascii"));
+    pdf += `${object}\n`;
+  }
+  const xrefOffset = Buffer.byteLength(pdf, "ascii");
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  pdf += offsets.slice(1).map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`).join("");
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return Buffer.from(pdf, "ascii");
+}
