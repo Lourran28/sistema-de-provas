@@ -179,8 +179,9 @@ export function ExamVersionsPanel({ exam, onVersionsGenerated }: ExamVersionsPan
                     <p className="text-xs font-semibold uppercase text-slate-500">Questão {question.position} · {formatScore(question.points)}</p>
                     <h4 className="mt-2 text-sm font-semibold leading-6 text-slate-950">{question.statement}</h4>
                     <ol className="mt-3 space-y-2 text-sm text-slate-700" type="A">
-                      {question.alternatives.map((alternative) => (
+                      {question.alternatives.map((alternative, alternativeIndex) => (
                         <li className="flex items-start gap-2 pl-1" key={alternative.alternativeId}>
+                          <span className="shrink-0 font-medium text-slate-600">{letterFor(alternativeIndex + 1)})</span>
                           <span>{alternative.text}</span>
                           {answer?.correctAlternativeId === alternative.alternativeId ? (
                             <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-xs font-medium text-emerald-800">Correta</span>
@@ -250,6 +251,10 @@ export function ExamVersionsPanel({ exam, onVersionsGenerated }: ExamVersionsPan
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof ApiRequestError ? error.message : fallback;
+}
+
+function letterFor(position: number) {
+  return String.fromCharCode(64 + position);
 }
 
 function formatScore(value: number) {

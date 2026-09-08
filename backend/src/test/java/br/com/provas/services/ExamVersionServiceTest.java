@@ -171,6 +171,7 @@ class ExamVersionServiceTest {
             for (ExamVersionQuestionResponse question : version.questions()) {
                 assertEquals(3, question.alternatives().size());
                 assertEquals(3, question.alternatives().stream().map(alternative -> alternative.alternativeId()).distinct().count());
+                assertTrue(question.alternatives().stream().allMatch(alternative -> alternative.text().startsWith("Alternativa")));
                 AnswerKeyItemResponse answer = keyByPosition.get(question.position());
                 UUID expectedCorrectAlternativeId = fixture.correctAlternativeByQuestionId().get(question.originalQuestionId());
                 assertEquals(expectedCorrectAlternativeId, answer.correctAlternativeId());
@@ -297,9 +298,9 @@ class ExamVersionServiceTest {
         List<AlternativeEntity> allAlternatives = new ArrayList<>();
         for (QuestionEntity question : questions) {
             List<AlternativeEntity> alternatives = List.of(
-                    new AlternativeEntity(question.getId(), "Alternativa 1", 1, false),
-                    new AlternativeEntity(question.getId(), "Alternativa 2", 2, true),
-                    new AlternativeEntity(question.getId(), "Alternativa 3", 3, false));
+                    new AlternativeEntity(question.getId(), "A) Alternativa 1", 1, false),
+                    new AlternativeEntity(question.getId(), "B) Alternativa 2", 2, true),
+                    new AlternativeEntity(question.getId(), "C) Alternativa 3", 3, false));
             alternativesByQuestionId.put(question.getId(), alternatives);
             correctAlternativeByQuestionId.put(question.getId(), alternatives.get(1).getId());
             allAlternatives.addAll(alternatives);

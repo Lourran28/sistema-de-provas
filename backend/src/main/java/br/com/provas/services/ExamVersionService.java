@@ -369,7 +369,10 @@ public class ExamVersionService {
                     if (alternative == null) {
                         throw new IllegalStateException("A composição da versão contém uma alternativa inválida.");
                     }
-                    return new ExamVersionAlternativeResponse(alternative.getId(), alternative.getText(), link.getPosition());
+                    return new ExamVersionAlternativeResponse(
+                            alternative.getId(),
+                            withoutStoredAlternativeLabel(alternative.getText()),
+                            link.getPosition());
                 })
                 .toList();
         return new ExamVersionQuestionResponse(
@@ -403,6 +406,10 @@ public class ExamVersionService {
         }
         points.add(totalScore.subtract(assigned));
         return points;
+    }
+
+    private String withoutStoredAlternativeLabel(String text) {
+        return text.replaceFirst("^\\s*[A-Za-z]\\s*[).:\\-]\\s*", "");
     }
 
     private String letterFor(int position) {
