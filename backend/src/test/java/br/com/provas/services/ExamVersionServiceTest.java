@@ -268,6 +268,65 @@ class ExamVersionServiceTest {
         verify(questionRepository, never()).delete(any(QuestionEntity.class));
     }
 
+    @Test
+    void reopensGeneratedExamForEditingAndRemovesOldVersions() {
+        UUID teacherId = UUID.randomUUID();
+        ExamEntity exam = new ExamEntity(
+                teacherId,
+                null,
+                "Avaliação",
+                null,
+                null,
+                null,
+                null,
+                null,
+                new BigDecimal("10.00"),
+                3);
+        exam.approve();
+        exam.markVersionsGenerated();
+        List<ExamVersionEntity> versions = List.of(
+                new ExamVersionEntity(exam.getId(), "A"),
+                new ExamVersionEntity(exam.getId(), "B"),
+                new ExamVersionEntity(exam.getId(), "C"));
+        when(examRepository.findByIdAndTeacherId(exam.getId(), teacherId)).thenReturn(Optional.of(exam));
+        when(examVersionRepository.findAllByExamIdOrderByLabelAsc(exam.getId())).thenReturn(versions);
+
+        examVersionService.reopenForEditing(teacherId, exam.getId());
+
+        assertEquals("DRAFT", exam.getStatus().name());
+        verify(examVersionRepository).deleteAll(versions);
+        verify(examVersionRepository).flush();
+        verify(examRepository).save(exam);
+    }
+
+    @Test
+    void blocksEditingWhenExamAlreadyHasCorrections() {
+        UUID teacherId = UUID.randomUUID();
+        ExamEntity exam = new ExamEntity(
+                teacherId,
+                null,
+                "Avaliação aplicada",
+                null,
+                null,
+                null,
+                null,
+                null,
+                new BigDecimal("10.00"),
+                3);
+        exam.approve();
+        exam.markVersionsGenerated();
+        ExamVersionEntity version = new ExamVersionEntity(exam.getId(), "A");
+        when(examRepository.findByIdAndTeacherId(exam.getId(), teacherId)).thenReturn(Optional.of(exam));
+        when(examVersionRepository.findAllByExamIdOrderByLabelAsc(exam.getId())).thenReturn(List.of(version));
+        when(correctionRepository.existsByTeacherIdAndExamVersionIdIn(teacherId, List.of(version.getId())))
+                .thenReturn(true);
+
+        assertThrows(IllegalStateException.class, () -> examVersionService.reopenForEditing(teacherId, exam.getId()));
+
+        verify(examVersionRepository, never()).deleteAll(any());
+        verify(examRepository, never()).save(exam);
+    }
+
     private Fixture fixture(boolean approved) {
         UUID teacherId = UUID.randomUUID();
         ExamEntity exam = new ExamEntity(

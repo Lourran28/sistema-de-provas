@@ -37,6 +37,10 @@ export function approveExam(examId: string) {
   return apiPost<Exam>(`/exams/${examId}/approve`, {});
 }
 
+export function reopenExamForEditing(examId: string) {
+  return apiPost<void>(`/exams/${examId}/reopen`, {});
+}
+
 export function regenerateExamQuestion(examId: string, questionId: string) {
   return apiPost<Exam>(`/exams/${examId}/questions/${questionId}/regenerate`, {});
 }

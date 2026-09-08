@@ -136,6 +136,14 @@ public class ExamController {
         return examService.toggleQuestionCancellation(principal.id(), examId, questionId);
     }
 
+    @PostMapping("/{examId}/reopen")
+    public ResponseEntity<Void> reopenForEditing(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID examId) {
+        examVersionService.reopenForEditing(principal.id(), examId);
+        return ResponseEntity.noContent().build();
+    }
+
     @DeleteMapping("/{examId}/questions/{questionId}")
     public List<ExamVersionResponse> removeQuestion(
             @AuthenticationPrincipal UserPrincipal principal,

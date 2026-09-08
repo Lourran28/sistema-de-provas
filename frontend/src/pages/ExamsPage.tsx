@@ -1,11 +1,11 @@
-import { ClipboardList, Eye, FilePlus2, Trash2 } from "lucide-react";
+import { ClipboardList, Eye, FilePlus2, Pencil, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { useConfirmation } from "../components/ui/confirmationContext";
-import { clearExams, deleteExam, getExams } from "../services/examService";
+import { clearExams, deleteExam, getExams, reopenExamForEditing } from "../services/examService";
 import { ApiRequestError } from "../services/httpClient";
 import { ModalDialog } from "../components/ui/ModalDialog";
 import { getSubjects } from "../services/subjectService";
@@ -25,6 +25,7 @@ export function ExamsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
   const [deletingExamId, setDeletingExamId] = useState<string | null>(null);
+  const [editingExamId, setEditingExamId] = useState<string | null>(null);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -69,6 +70,34 @@ export function ExamsPage() {
       setError(requestError instanceof ApiRequestError ? requestError.message : "Não foi possível remover a prova.");
     } finally {
       setDeletingExamId(null);
+    }
+  }
+
+  async function editExam(exam: Exam) {
+    if (exam.status === "DRAFT") {
+      navigate(`/provas/${exam.id}`, { state: { edit: true } });
+      return;
+    }
+    const hasOfficialVersions = exam.status === "VERSIONS_GENERATED" || exam.status === "APPLIED";
+    if (!(await confirm({
+      confirmLabel: "Reabrir para edição",
+      description: hasOfficialVersions
+        ? "As versões A, B e C atuais e seus gabaritos serão removidos. Depois de editar e aprovar, será necessário gerar novas versões e descartar arquivos antigos já baixados ou impressos."
+        : "A prova voltará para rascunho para que você possa adicionar, remover, trocar ou reordenar questões.",
+      title: "Editar prova"
+    }))) {
+      return;
+    }
+    setEditingExamId(exam.id);
+    setError("");
+    setNotice("");
+    try {
+      await reopenExamForEditing(exam.id);
+      navigate(`/provas/${exam.id}`, { state: { edit: true } });
+    } catch (requestError) {
+      setError(requestError instanceof ApiRequestError ? requestError.message : "Não foi possível abrir a prova para edição.");
+    } finally {
+      setEditingExamId(null);
     }
   }
 
@@ -147,7 +176,7 @@ export function ExamsPage() {
                   <th className="px-5 py-3">Questões</th>
                   <th className="px-5 py-3">Nota total</th>
                   <th className="px-5 py-3">Status</th>
-                  <th className="w-28 px-5 py-3 text-right">Ações</th>
+                  <th className="w-32 px-5 py-3 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-200">
@@ -164,7 +193,7 @@ export function ExamsPage() {
                       <span className="rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">{examStatusLabels[exam.status]}</span>
                     </td>
                     <td className="px-5 py-4 text-right">
-                      <ExamActions deletingExamId={deletingExamId} exam={exam} onRemove={removeExam} onReview={() => navigate(`/provas/${exam.id}`)} />
+                      <ExamActions deletingExamId={deletingExamId} editingExamId={editingExamId} exam={exam} onEdit={editExam} onRemove={removeExam} onReview={() => navigate(`/provas/${exam.id}`)} />
                     </td>
                   </tr>
                 ))}
@@ -179,7 +208,7 @@ export function ExamsPage() {
                     <p className="truncate text-sm font-semibold text-slate-900">{exam.title}</p>
                     <p className="mt-1 text-xs text-slate-500">{examKindLabels[exam.kind]} · {exam.classGroup ?? "Sem turma"} · {exam.questionCount} questões · {formatScore(exam.totalScore)}</p>
                   </div>
-                  <ExamActions deletingExamId={deletingExamId} exam={exam} onRemove={removeExam} onReview={() => navigate(`/provas/${exam.id}`)} />
+                  <ExamActions deletingExamId={deletingExamId} editingExamId={editingExamId} exam={exam} onEdit={editExam} onRemove={removeExam} onReview={() => navigate(`/provas/${exam.id}`)} />
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
                   <span className="rounded-md bg-stone-100 px-2 py-1 text-slate-700">{exam.subjectId ? subjectNames.get(exam.subjectId) ?? "Disciplina removida" : "Sem disciplina"}</span>
@@ -209,10 +238,20 @@ export function ExamsPage() {
   );
 }
 
-function ExamActions({ deletingExamId, exam, onRemove, onReview }: { deletingExamId: string | null; exam: Exam; onRemove: (exam: Exam) => Promise<void>; onReview: () => void }) {
+type ExamActionsProps = {
+  deletingExamId: string | null;
+  editingExamId: string | null;
+  exam: Exam;
+  onEdit: (exam: Exam) => Promise<void>;
+  onRemove: (exam: Exam) => Promise<void>;
+  onReview: () => void;
+};
+
+function ExamActions({ deletingExamId, editingExamId, exam, onEdit, onRemove, onReview }: ExamActionsProps) {
   return (
     <div className="flex shrink-0 justify-end gap-1">
       <Button aria-label={`Revisar ${exam.title}`} className="h-9 w-9 px-0" icon={Eye} onClick={onReview} title="Revisar prova" variant="ghost" />
+      <Button aria-label={`Editar ${exam.title}`} className="h-9 w-9 px-0" disabled={editingExamId === exam.id} icon={Pencil} onClick={() => void onEdit(exam)} title="Editar prova" variant="ghost" />
       <Button
         aria-label={`Remover ${exam.title}`}
         className="h-9 w-9 px-0 text-rose-700 hover:bg-rose-50 hover:text-rose-800"

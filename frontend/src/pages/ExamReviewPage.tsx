@@ -1,6 +1,6 @@
 import { Ban, CheckCircle2, Pencil, RefreshCw, RotateCcw, Save, Sparkles, Trash2 } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -22,6 +22,7 @@ import type { Question } from "../types/questions";
 export function ExamReviewPage() {
   const { examId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { confirm } = useConfirmation();
   const [exam, setExam] = useState<Exam | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -32,7 +33,7 @@ export function ExamReviewPage() {
   const [regeneratingQuestionId, setRegeneratingQuestionId] = useState<string | null>(null);
   const [cancellingQuestionId, setCancellingQuestionId] = useState<string | null>(null);
   const [removingQuestionId, setRemovingQuestionId] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(() => Boolean((location.state as { edit?: boolean } | null)?.edit));
   const [isRenaming, setIsRenaming] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");

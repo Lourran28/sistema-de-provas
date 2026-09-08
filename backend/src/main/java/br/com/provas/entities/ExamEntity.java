@@ -234,6 +234,10 @@ public class ExamEntity {
         this.status = ExamStatus.READY;
     }
 
+    public void reopenDraft() {
+        this.status = ExamStatus.DRAFT;
+    }
+
     public void markApplied() {
         this.status = ExamStatus.APPLIED;
     }

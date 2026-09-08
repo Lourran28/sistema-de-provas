@@ -130,6 +130,31 @@ public class ExamVersionService {
     }
 
     @Transactional
+    public void reopenForEditing(UUID teacherId, UUID examId) {
+        ExamEntity exam = findExam(teacherId, examId);
+        if (exam.getStatus() == ExamStatus.DRAFT) {
+            return;
+        }
+        if (exam.getStatus() != ExamStatus.READY
+                && exam.getStatus() != ExamStatus.VERSIONS_GENERATED
+                && exam.getStatus() != ExamStatus.APPLIED) {
+            throw new IllegalStateException("Esta prova não pode mais ser reaberta para edição.");
+        }
+
+        List<ExamVersionEntity> versions = examVersionRepository.findAllByExamIdOrderByLabelAsc(examId);
+        List<UUID> versionIds = versions.stream().map(ExamVersionEntity::getId).toList();
+        if (examApplicationRepository.existsByExamId(examId)
+                || (!versionIds.isEmpty() && correctionRepository.existsByTeacherIdAndExamVersionIdIn(teacherId, versionIds))) {
+            throw new IllegalStateException("Não é possível editar uma prova depois de registrar aplicações ou iniciar correções.");
+        }
+
+        examVersionRepository.deleteAll(versions);
+        examVersionRepository.flush();
+        exam.reopenDraft();
+        examRepository.save(exam);
+    }
+
+    @Transactional
     public List<ExamVersionResponse> generate(UUID teacherId, UUID examId) {
         ExamEntity exam = findExam(teacherId, examId);
         if (exam.getStatus() != ExamStatus.READY) {
