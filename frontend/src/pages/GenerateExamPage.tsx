@@ -1,20 +1,22 @@
-import { CheckSquare, Sparkles } from "lucide-react";
+import { CheckSquare, Sparkles, Trash2 } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
+import { useConfirmation } from "../components/ui/confirmationContext";
 import { ExamCreationModeSwitch } from "../features/exams/ExamCreationModeSwitch";
 import { getContents } from "../services/contentService";
 import { generateExam } from "../services/examService";
 import { ApiRequestError } from "../services/httpClient";
-import { getSubjects } from "../services/subjectService";
+import { deleteSubject, getSubjects } from "../services/subjectService";
 import type { Content, Subject } from "../types/contents";
 import { difficultyLabels, type QuestionDifficulty } from "../types/questions";
 import { examKindLabels, type ExamKind, type QuestionDistributionMode } from "../types/exams";
 
 export function GenerateExamPage() {
   const navigate = useNavigate();
+  const { confirm } = useConfirmation();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [contents, setContents] = useState<Content[]>([]);
   const [title, setTitle] = useState("");
@@ -102,6 +104,27 @@ export function GenerateExamPage() {
     setTopic("");
     setSelectedContentIds([]);
     setManualCounts({});
+  }
+
+  async function removeSelectedSubject() {
+    const subject = subjects.find((item) => item.id === subjectId);
+    if (!subject || !(await confirm({
+      confirmLabel: "Excluir disciplina",
+      description: `Excluir a disciplina “${subject.name}”? Provas, questões e conteúdos existentes serão preservados como “Sem disciplina”.`,
+      title: "Excluir disciplina",
+      variant: "danger"
+    }))) {
+      return;
+    }
+
+    setError("");
+    try {
+      await deleteSubject(subject.id);
+      setSubjects((current) => current.filter((item) => item.id !== subject.id));
+      changeSubject("");
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "Não foi possível excluir a disciplina."));
+    }
   }
 
   function changeTopic(nextTopic: string) {
@@ -217,10 +240,11 @@ export function GenerateExamPage() {
             value={title}
           />
         </label>
-        <label className="block text-sm font-medium text-slate-700" htmlFor="generated-exam-subject">
-          Disciplina
-          <select
-            className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-800 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
+        <div className="block text-sm font-medium text-slate-700">
+          <label htmlFor="generated-exam-subject">Disciplina</label>
+          <div className="mt-2 flex gap-2">
+            <select
+            className="h-11 min-w-0 flex-1 rounded-lg border border-stone-300 bg-white px-3 text-slate-800 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
             id="generated-exam-subject"
             onChange={(event) => changeSubject(event.target.value)}
             value={subjectId}
@@ -231,8 +255,10 @@ export function GenerateExamPage() {
                 {subject.name}
               </option>
             ))}
-          </select>
-        </label>
+            </select>
+            <Button aria-label="Excluir disciplina selecionada" className="h-11 w-11 shrink-0 px-0 text-rose-700 hover:bg-rose-50 hover:text-rose-800" disabled={!subjectId} icon={Trash2} onClick={() => void removeSelectedSubject()} title="Excluir disciplina selecionada" type="button" variant="secondary" />
+          </div>
+        </div>
         <label className="block text-sm font-medium text-slate-700" htmlFor="generated-exam-class-group">
           Turma
           <input

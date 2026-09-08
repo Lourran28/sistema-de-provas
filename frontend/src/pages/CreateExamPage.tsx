@@ -1,20 +1,22 @@
-import { ArrowRight, CheckSquare, Search, Save } from "lucide-react";
+import { ArrowRight, CheckSquare, Search, Save, Trash2 } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
+import { useConfirmation } from "../components/ui/confirmationContext";
 import { ExamCreationModeSwitch } from "../features/exams/ExamCreationModeSwitch";
 import { getContents } from "../services/contentService";
 import { createExam } from "../services/examService";
 import { ApiRequestError } from "../services/httpClient";
 import { getQuestions } from "../services/questionService";
-import { getSubjects } from "../services/subjectService";
+import { deleteSubject, getSubjects } from "../services/subjectService";
 import type { Content, Subject } from "../types/contents";
 import { examKindLabels, type ExamKind } from "../types/exams";
 import { difficultyLabels, type Question } from "../types/questions";
 
 export function CreateExamPage() {
+  const { confirm } = useConfirmation();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [contents, setContents] = useState<Content[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -78,6 +80,28 @@ export function CreateExamPage() {
     setSelectedQuestionIds((current) =>
       current.includes(questionId) ? current.filter((selectedId) => selectedId !== questionId) : [...current, questionId]
     );
+  }
+
+  async function removeSelectedSubject() {
+    const subject = subjects.find((item) => item.id === subjectId);
+    if (!subject || !(await confirm({
+      confirmLabel: "Excluir disciplina",
+      description: `Excluir a disciplina “${subject.name}”? Provas, questões e conteúdos existentes serão preservados como “Sem disciplina”.`,
+      title: "Excluir disciplina",
+      variant: "danger"
+    }))) {
+      return;
+    }
+
+    setError("");
+    try {
+      await deleteSubject(subject.id);
+      setSubjects((current) => current.filter((item) => item.id !== subject.id));
+      setSubjectId("");
+      setSuccess(`Disciplina “${subject.name}” removida.`);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "Não foi possível excluir a disciplina."));
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -184,10 +208,11 @@ export function CreateExamPage() {
                 value={title}
               />
             </label>
-            <label className="block text-sm font-medium text-slate-700" htmlFor="exam-subject">
-              Disciplina
-              <select
-                className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-800 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
+            <div className="block text-sm font-medium text-slate-700">
+              <label htmlFor="exam-subject">Disciplina</label>
+              <div className="mt-2 flex gap-2">
+                <select
+                className="h-11 min-w-0 flex-1 rounded-lg border border-stone-300 bg-white px-3 text-slate-800 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
                 id="exam-subject"
                 onChange={(event) => setSubjectId(event.target.value)}
                 value={subjectId}
@@ -198,8 +223,10 @@ export function CreateExamPage() {
                     {subject.name}
                   </option>
                 ))}
-              </select>
-            </label>
+                </select>
+                <Button aria-label="Excluir disciplina selecionada" className="h-11 w-11 shrink-0 px-0 text-rose-700 hover:bg-rose-50 hover:text-rose-800" disabled={!subjectId} icon={Trash2} onClick={() => void removeSelectedSubject()} title="Excluir disciplina selecionada" type="button" variant="secondary" />
+              </div>
+            </div>
             <label className="block text-sm font-medium text-slate-700" htmlFor="exam-class-group">
               Turma
               <input
