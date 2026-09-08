@@ -163,6 +163,14 @@ public class ExamService {
     }
 
     @Transactional
+    public ExamResponse rename(UUID teacherId, UUID examId, String title) {
+        ExamEntity exam = findEntity(teacherId, examId);
+        exam.rename(normalizeRequired(title));
+        examRepository.save(exam);
+        return toResponse(exam);
+    }
+
+    @Transactional
     public ExamResponse generate(UUID teacherId, GenerateExamRequest request) {
         List<GeneratedExamContentRequest> requestedContents = request.contents();
         if (requestedContents.stream().map(GeneratedExamContentRequest::contentId).distinct().count() != requestedContents.size()) {

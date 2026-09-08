@@ -26,6 +26,7 @@ import br.com.provas.dtos.exams.ExamClearResponse;
 import br.com.provas.dtos.exams.ExamRequest;
 import br.com.provas.dtos.exams.ExamResponse;
 import br.com.provas.dtos.exams.GenerateExamRequest;
+import br.com.provas.dtos.exams.RenameExamRequest;
 import br.com.provas.dtos.applications.ExamApplicationRequest;
 import br.com.provas.dtos.applications.ExamApplicationResponse;
 import br.com.provas.dtos.versions.ExamVersionResponse;
@@ -94,6 +95,14 @@ public class ExamController {
             @PathVariable UUID examId,
             @Valid @RequestBody ExamRequest request) {
         return examService.updateDraft(principal.id(), examId, request);
+    }
+
+    @PatchMapping("/{examId}/title")
+    public ExamResponse rename(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID examId,
+            @Valid @RequestBody RenameExamRequest request) {
+        return examService.rename(principal.id(), examId, request.title());
     }
 
     @PostMapping("/generate")

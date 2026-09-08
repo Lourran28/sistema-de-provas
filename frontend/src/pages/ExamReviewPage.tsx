@@ -1,16 +1,17 @@
-import { Ban, CheckCircle2, Pencil, RefreshCw, RotateCcw, Sparkles } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Ban, CheckCircle2, Pencil, RefreshCw, RotateCcw, Save, Sparkles } from "lucide-react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { useConfirmation } from "../components/ui/confirmationContext";
 import { MathText } from "../components/ui/MathText";
+import { ModalDialog } from "../components/ui/ModalDialog";
 import { ExamDraftEditor } from "../features/exams/ExamDraftEditor";
 import { ExamApplicationsPanel } from "../features/exams/ExamApplicationsPanel";
 import { ExamVersionsPanel } from "../features/exams/ExamVersionsPanel";
 import { getContents } from "../services/contentService";
-import { approveExam, getExam, regenerateExamQuestion, toggleQuestionCancellation, updateExam } from "../services/examService";
+import { approveExam, getExam, regenerateExamQuestion, renameExam, toggleQuestionCancellation, updateExam } from "../services/examService";
 import { ApiRequestError } from "../services/httpClient";
 import { getQuestions } from "../services/questionService";
 import { getSubjects } from "../services/subjectService";
@@ -31,6 +32,7 @@ export function ExamReviewPage() {
   const [regeneratingQuestionId, setRegeneratingQuestionId] = useState<string | null>(null);
   const [cancellingQuestionId, setCancellingQuestionId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -153,6 +155,25 @@ export function ExamReviewPage() {
     }
   }
 
+  async function handleRename(title: string) {
+    if (!exam) {
+      return;
+    }
+    setIsSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      setExam(await renameExam(exam.id, title));
+      setIsRenaming(false);
+      setNotice("Nome da prova atualizado.");
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "Não foi possível renomear a prova."));
+      throw requestError;
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   async function handleVersionsGenerated() {
     if (!exam) {
       return;
@@ -186,7 +207,10 @@ export function ExamReviewPage() {
       <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold text-slate-950">{exam.title}</h1>
+            <div className="flex min-w-0 items-center gap-1">
+              <h1 className="truncate text-2xl font-semibold text-slate-950">{exam.title}</h1>
+              <Button aria-label="Renomear prova" className="h-9 w-9 shrink-0 px-0" disabled={isSaving} icon={Pencil} onClick={() => setIsRenaming(true)} title="Renomear prova" variant="ghost" />
+            </div>
             <span className="rounded-md bg-teal-50 px-2 py-1 text-xs font-semibold text-teal-800">{examKindLabels[exam.kind]}</span>
             <span className="rounded-md bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">{examStatusLabels[exam.status]}</span>
           </div>
@@ -216,6 +240,10 @@ export function ExamReviewPage() {
         <div aria-live="polite" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
           {notice}
         </div>
+      ) : null}
+
+      {isRenaming ? (
+        <RenameExamModal currentTitle={exam.title} isSaving={isSaving} onClose={() => setIsRenaming(false)} onSave={handleRename} />
       ) : null}
 
       {isEditing ? (
@@ -322,6 +350,51 @@ export function ExamReviewPage() {
         </>
       )}
     </div>
+  );
+}
+
+type RenameExamModalProps = {
+  currentTitle: string;
+  isSaving: boolean;
+  onClose: () => void;
+  onSave: (title: string) => Promise<void>;
+};
+
+function RenameExamModal({ currentTitle, isSaving, onClose, onSave }: RenameExamModalProps) {
+  const [title, setTitle] = useState(currentTitle);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const normalizedTitle = title.trim();
+    if (!normalizedTitle) {
+      setError("Informe o novo nome da prova.");
+      return;
+    }
+    try {
+      await onSave(normalizedTitle);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "Não foi possível renomear a prova."));
+    }
+  }
+
+  return (
+    <ModalDialog onClose={isSaving ? () => undefined : onClose} size="lg" title="Renomear prova">
+      <form onSubmit={handleSubmit}>
+        <div className="px-5 py-5 sm:px-6">
+          {error ? <div className="mb-4 border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">{error}</div> : null}
+          <label className="block text-sm font-medium text-slate-700" htmlFor="rename-exam-title">
+            Nome da prova
+            <input autoFocus className="mt-2 h-11 w-full rounded-lg border border-stone-300 px-3 text-slate-950 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id="rename-exam-title" maxLength={180} onChange={(event) => setTitle(event.target.value)} required value={title} />
+          </label>
+          <p className="mt-2 text-xs leading-5 text-slate-500">As questões, versões oficiais e gabaritos não serão alterados.</p>
+        </div>
+        <footer className="flex justify-end gap-2 border-t border-stone-200 px-5 py-4 sm:px-6">
+          <Button disabled={isSaving} onClick={onClose} type="button" variant="secondary">Cancelar</Button>
+          <Button disabled={isSaving || title.trim() === currentTitle.trim()} icon={Save} type="submit">{isSaving ? "Salvando..." : "Salvar nome"}</Button>
+        </footer>
+      </form>
+    </ModalDialog>
   );
 }
 

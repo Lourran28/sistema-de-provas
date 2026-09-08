@@ -25,6 +25,10 @@ export function updateExam(examId: string, input: ExamInput) {
   return apiPatch<Exam>(`/exams/${examId}`, input);
 }
 
+export function renameExam(examId: string, title: string) {
+  return apiPatch<Exam>(`/exams/${examId}/title`, { title });
+}
+
 export function generateExam(input: GenerateExamInput) {
   return apiPost<Exam>("/exams/generate", input);
 }

@@ -198,6 +198,10 @@ public class ExamEntity {
         this.status = ExamStatus.READY;
     }
 
+    public void rename(String title) {
+        this.title = title;
+    }
+
     public void updateDraft(
             UUID subjectId,
             String title,

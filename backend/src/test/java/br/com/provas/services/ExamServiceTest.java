@@ -230,6 +230,35 @@ class ExamServiceTest {
     }
 
     @Test
+    void renamesAnExamAfterOfficialVersionsAreGenerated() {
+        UUID teacherId = UUID.randomUUID();
+        ExamEntity exam = new ExamEntity(
+                teacherId,
+                null,
+                "Prova de Portugues",
+                null,
+                null,
+                null,
+                null,
+                null,
+                new BigDecimal("10.00"),
+                10);
+        exam.approve();
+        exam.markVersionsGenerated();
+        when(examRepository.findByIdAndTeacherId(exam.getId(), teacherId)).thenReturn(Optional.of(exam));
+        when(examRepository.save(any(ExamEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(examContentRepository.findAllByIdExamIdOrderByIdContentIdAsc(any())).thenReturn(List.of());
+        when(examQuestionRepository.findAllByExamIdOrderByPositionAsc(any())).thenReturn(List.of());
+
+        var renamed = examService.rename(teacherId, exam.getId(), "Avaliação de Português");
+
+        assertEquals("Avaliação de Português", renamed.title());
+        assertEquals("VERSIONS_GENERATED", renamed.status().name());
+        verify(examRepository).save(exam);
+        verify(examQuestionRepository, never()).deleteByExamId(any());
+    }
+
+    @Test
     void preventsQuestionCancellationAfterAConfirmedCorrection() {
         UUID teacherId = UUID.randomUUID();
         ExamEntity exam = new ExamEntity(
