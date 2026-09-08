@@ -10,6 +10,8 @@ import br.com.provas.entities.ExamApplicationEntity;
 
 public interface ExamApplicationRepository extends JpaRepository<ExamApplicationEntity, UUID> {
 
+    boolean existsByExamId(UUID examId);
+
     List<ExamApplicationEntity> findAllByExamIdOrderByAppliedOnDescCreatedAtDesc(UUID examId);
 
     List<ExamApplicationEntity> findAllByTeacherIdAndAppliedOnBetweenOrderByAppliedOnAscCreatedAtAsc(

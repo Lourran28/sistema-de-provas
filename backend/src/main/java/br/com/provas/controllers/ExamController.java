@@ -136,6 +136,14 @@ public class ExamController {
         return examService.toggleQuestionCancellation(principal.id(), examId, questionId);
     }
 
+    @DeleteMapping("/{examId}/questions/{questionId}")
+    public List<ExamVersionResponse> removeQuestion(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID examId,
+            @PathVariable UUID questionId) {
+        return examVersionService.removeQuestionAndRegenerate(principal.id(), examId, questionId);
+    }
+
     @PostMapping("/{examId}/versions")
     public ResponseEntity<List<ExamVersionResponse>> generateVersions(
             @AuthenticationPrincipal UserPrincipal principal,

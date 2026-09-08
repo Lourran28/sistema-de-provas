@@ -88,4 +88,9 @@ public class ExamQuestionEntity {
     public void replaceQuestion(UUID questionId) {
         this.questionId = questionId;
     }
+
+    public void updatePlacement(int position, BigDecimal points) {
+        this.position = position;
+        this.points = points;
+    }
 }

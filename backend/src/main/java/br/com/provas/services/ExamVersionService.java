@@ -1,5 +1,7 @@
 package br.com.provas.services;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -21,6 +23,7 @@ import br.com.provas.entities.AlternativeEntity;
 import br.com.provas.entities.AnswerKeyEntity;
 import br.com.provas.entities.AnswerKeyItemEntity;
 import br.com.provas.entities.ExamEntity;
+import br.com.provas.entities.ExamKind;
 import br.com.provas.entities.ExamQuestionEntity;
 import br.com.provas.entities.ExamStatus;
 import br.com.provas.entities.ExamVersionAlternativeEntity;
@@ -31,6 +34,8 @@ import br.com.provas.exceptions.NotFoundException;
 import br.com.provas.repositories.AlternativeRepository;
 import br.com.provas.repositories.AnswerKeyItemRepository;
 import br.com.provas.repositories.AnswerKeyRepository;
+import br.com.provas.repositories.CorrectionRepository;
+import br.com.provas.repositories.ExamApplicationRepository;
 import br.com.provas.repositories.ExamQuestionRepository;
 import br.com.provas.repositories.ExamRepository;
 import br.com.provas.repositories.ExamVersionAlternativeRepository;
@@ -52,6 +57,8 @@ public class ExamVersionService {
     private final ExamVersionAlternativeRepository examVersionAlternativeRepository;
     private final AnswerKeyRepository answerKeyRepository;
     private final AnswerKeyItemRepository answerKeyItemRepository;
+    private final CorrectionRepository correctionRepository;
+    private final ExamApplicationRepository examApplicationRepository;
     private final SecureRandom random = new SecureRandom();
 
     public ExamVersionService(
@@ -63,7 +70,9 @@ public class ExamVersionService {
             ExamVersionQuestionRepository examVersionQuestionRepository,
             ExamVersionAlternativeRepository examVersionAlternativeRepository,
             AnswerKeyRepository answerKeyRepository,
-            AnswerKeyItemRepository answerKeyItemRepository) {
+            AnswerKeyItemRepository answerKeyItemRepository,
+            CorrectionRepository correctionRepository,
+            ExamApplicationRepository examApplicationRepository) {
         this.examRepository = examRepository;
         this.examQuestionRepository = examQuestionRepository;
         this.questionRepository = questionRepository;
@@ -73,6 +82,51 @@ public class ExamVersionService {
         this.examVersionAlternativeRepository = examVersionAlternativeRepository;
         this.answerKeyRepository = answerKeyRepository;
         this.answerKeyItemRepository = answerKeyItemRepository;
+        this.correctionRepository = correctionRepository;
+        this.examApplicationRepository = examApplicationRepository;
+    }
+
+    @Transactional
+    public List<ExamVersionResponse> removeQuestionAndRegenerate(UUID teacherId, UUID examId, UUID questionId) {
+        ExamEntity exam = findExam(teacherId, examId);
+        if (exam.getStatus() != ExamStatus.VERSIONS_GENERATED) {
+            throw new IllegalStateException("A questão só pode ser removida depois de gerar as versões e antes de registrar a aplicação.");
+        }
+        if (exam.getKind() == ExamKind.SIMULADO) {
+            throw new IllegalStateException("O simulado precisa manter exatamente 21 questões. Substitua a questão em vez de removê-la.");
+        }
+
+        List<ExamQuestionEntity> examQuestions = examQuestionRepository.findAllByExamIdOrderByPositionAsc(examId);
+        if (examQuestions.size() <= 1) {
+            throw new IllegalStateException("A prova precisa manter pelo menos uma questão.");
+        }
+        ExamQuestionEntity questionToRemove = examQuestionRepository.findByExamIdAndQuestionId(examId, questionId)
+                .orElseThrow(() -> new NotFoundException("Questão não encontrada nesta prova."));
+
+        List<ExamVersionEntity> versions = examVersionRepository.findAllByExamIdOrderByLabelAsc(examId);
+        List<UUID> versionIds = versions.stream().map(ExamVersionEntity::getId).toList();
+        if (examApplicationRepository.existsByExamId(examId)
+                || (!versionIds.isEmpty() && correctionRepository.existsByTeacherIdAndExamVersionIdIn(teacherId, versionIds))) {
+            throw new IllegalStateException("Não é possível remover uma questão depois de registrar aplicações ou iniciar correções desta prova.");
+        }
+
+        examVersionRepository.deleteAll(versions);
+        examVersionRepository.flush();
+        examQuestionRepository.delete(questionToRemove);
+        examQuestionRepository.flush();
+
+        List<ExamQuestionEntity> remainingQuestions = examQuestions.stream()
+                .filter(examQuestion -> !examQuestion.getId().equals(questionToRemove.getId()))
+                .toList();
+        List<BigDecimal> pointValues = distributeScores(exam.getTotalScore(), remainingQuestions.size());
+        for (int index = 0; index < remainingQuestions.size(); index++) {
+            remainingQuestions.get(index).updatePlacement(index + 1, pointValues.get(index));
+        }
+        examQuestionRepository.saveAll(remainingQuestions);
+        exam.prepareVersionRegeneration(remainingQuestions.size());
+        examRepository.saveAndFlush(exam);
+
+        return generate(teacherId, examId);
     }
 
     @Transactional
@@ -338,6 +392,17 @@ public class ExamVersionService {
         if (distinctCount != examQuestions.size()) {
             throw new IllegalStateException("A prova contém questões duplicadas e não pode gerar versões.");
         }
+    }
+
+    private List<BigDecimal> distributeScores(BigDecimal totalScore, int questionCount) {
+        BigDecimal baseValue = totalScore.divide(BigDecimal.valueOf(questionCount), 2, RoundingMode.DOWN);
+        BigDecimal assigned = baseValue.multiply(BigDecimal.valueOf(questionCount - 1));
+        List<BigDecimal> points = new ArrayList<>();
+        for (int index = 0; index < questionCount - 1; index++) {
+            points.add(baseValue);
+        }
+        points.add(totalScore.subtract(assigned));
+        return points;
     }
 
     private String letterFor(int position) {

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -41,6 +42,8 @@ import br.com.provas.entities.QuestionType;
 import br.com.provas.repositories.AlternativeRepository;
 import br.com.provas.repositories.AnswerKeyItemRepository;
 import br.com.provas.repositories.AnswerKeyRepository;
+import br.com.provas.repositories.CorrectionRepository;
+import br.com.provas.repositories.ExamApplicationRepository;
 import br.com.provas.repositories.ExamQuestionRepository;
 import br.com.provas.repositories.ExamRepository;
 import br.com.provas.repositories.ExamVersionAlternativeRepository;
@@ -77,6 +80,12 @@ class ExamVersionServiceTest {
 
     @Mock
     private AnswerKeyItemRepository answerKeyItemRepository;
+
+    @Mock
+    private CorrectionRepository correctionRepository;
+
+    @Mock
+    private ExamApplicationRepository examApplicationRepository;
 
     @InjectMocks
     private ExamVersionService examVersionService;
@@ -197,6 +206,66 @@ class ExamVersionServiceTest {
         verify(examVersionRepository, never()).saveAll(any());
     }
 
+    @Test
+    void blocksQuestionRemovalWhenExamHasAnApplication() {
+        Fixture fixture = fixture(true);
+        fixture.exam().markVersionsGenerated();
+        ExamQuestionEntity questionToRemove = examQuestionRepository
+                .findAllByExamIdOrderByPositionAsc(fixture.exam().getId()).get(0);
+        when(examQuestionRepository.findByExamIdAndQuestionId(
+                fixture.exam().getId(), questionToRemove.getQuestionId()))
+                .thenReturn(Optional.of(questionToRemove));
+        when(examVersionRepository.findAllByExamIdOrderByLabelAsc(fixture.exam().getId()))
+                .thenReturn(List.of(new ExamVersionEntity(fixture.exam().getId(), "A")));
+        when(examApplicationRepository.existsByExamId(fixture.exam().getId())).thenReturn(true);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> examVersionService.removeQuestionAndRegenerate(
+                        fixture.teacherId(), fixture.exam().getId(), questionToRemove.getQuestionId()));
+
+        assertTrue(exception.getMessage().contains("aplicações ou iniciar correções"));
+        verify(examVersionRepository, never()).deleteAll(any());
+        verify(examQuestionRepository, never()).delete(any());
+    }
+
+    @Test
+    void removesQuestionOnlyFromExamAndRegeneratesVersions() {
+        configurePersistence();
+        Fixture fixture = fixture(true);
+        fixture.exam().markVersionsGenerated();
+        List<ExamQuestionEntity> originalQuestions = examQuestionRepository
+                .findAllByExamIdOrderByPositionAsc(fixture.exam().getId());
+        ExamQuestionEntity questionToRemove = originalQuestions.get(1);
+        List<ExamQuestionEntity> remainingQuestions = List.of(originalQuestions.get(0), originalQuestions.get(2));
+        List<QuestionEntity> remainingQuestionEntities = List.of(fixture.questions().get(0), fixture.questions().get(2));
+        ExamVersionEntity previousVersion = new ExamVersionEntity(fixture.exam().getId(), "A");
+
+        when(examQuestionRepository.findByExamIdAndQuestionId(
+                fixture.exam().getId(), questionToRemove.getQuestionId()))
+                .thenReturn(Optional.of(questionToRemove));
+        when(examVersionRepository.findAllByExamIdOrderByLabelAsc(fixture.exam().getId()))
+                .thenReturn(List.of(previousVersion));
+        when(examQuestionRepository.findAllByExamIdOrderByPositionAsc(fixture.exam().getId()))
+                .thenReturn(originalQuestions, remainingQuestions, remainingQuestions, remainingQuestions, remainingQuestions);
+        when(questionRepository.findAllByIdInAndTeacherId(any(), eq(fixture.teacherId())))
+                .thenReturn(remainingQuestionEntities);
+
+        List<ExamVersionResponse> regeneratedVersions = examVersionService.removeQuestionAndRegenerate(
+                fixture.teacherId(), fixture.exam().getId(), questionToRemove.getQuestionId());
+
+        assertEquals(3, regeneratedVersions.size());
+        assertEquals(2, fixture.exam().getQuestionCount());
+        assertEquals("VERSIONS_GENERATED", fixture.exam().getStatus().name());
+        assertEquals(List.of(1, 2), remainingQuestions.stream().map(ExamQuestionEntity::getPosition).toList());
+        assertEquals(new BigDecimal("10.00"), remainingQuestions.stream()
+                .map(ExamQuestionEntity::getPoints)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        verify(examVersionRepository).deleteAll(List.of(previousVersion));
+        verify(examQuestionRepository).delete(questionToRemove);
+        verify(questionRepository, never()).delete(any(QuestionEntity.class));
+    }
+
     private Fixture fixture(boolean approved) {
         UUID teacherId = UUID.randomUUID();
         ExamEntity exam = new ExamEntity(
@@ -237,11 +306,11 @@ class ExamVersionServiceTest {
         }
 
         when(examRepository.findByIdAndTeacherId(eq(exam.getId()), eq(teacherId))).thenReturn(Optional.of(exam));
-        when(examVersionRepository.existsByExamId(exam.getId())).thenReturn(false);
+        lenient().when(examVersionRepository.existsByExamId(exam.getId())).thenReturn(false);
         when(examQuestionRepository.findAllByExamIdOrderByPositionAsc(exam.getId())).thenReturn(examQuestions);
-        when(questionRepository.findAllByIdInAndTeacherId(any(), eq(teacherId))).thenReturn(questions);
-        when(alternativeRepository.findAllByQuestionIdOrderByPositionAsc(any())).thenAnswer(invocation -> alternativesByQuestionId.get(invocation.getArgument(0)));
-        when(alternativeRepository.findAllById(any())).thenAnswer(invocation -> {
+        lenient().when(questionRepository.findAllByIdInAndTeacherId(any(), eq(teacherId))).thenReturn(questions);
+        lenient().when(alternativeRepository.findAllByQuestionIdOrderByPositionAsc(any())).thenAnswer(invocation -> alternativesByQuestionId.get(invocation.getArgument(0)));
+        lenient().when(alternativeRepository.findAllById(any())).thenAnswer(invocation -> {
             Iterable<UUID> requestedIds = invocation.getArgument(0);
             List<UUID> ids = new ArrayList<>();
             requestedIds.forEach(ids::add);

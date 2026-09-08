@@ -1,4 +1,4 @@
-import { Ban, CheckCircle2, Pencil, RefreshCw, RotateCcw, Save, Sparkles } from "lucide-react";
+import { Ban, CheckCircle2, Pencil, RefreshCw, RotateCcw, Save, Sparkles, Trash2 } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -11,7 +11,7 @@ import { ExamDraftEditor } from "../features/exams/ExamDraftEditor";
 import { ExamApplicationsPanel } from "../features/exams/ExamApplicationsPanel";
 import { ExamVersionsPanel } from "../features/exams/ExamVersionsPanel";
 import { getContents } from "../services/contentService";
-import { approveExam, getExam, regenerateExamQuestion, renameExam, toggleQuestionCancellation, updateExam } from "../services/examService";
+import { approveExam, getExam, regenerateExamQuestion, removeExamQuestion, renameExam, toggleQuestionCancellation, updateExam } from "../services/examService";
 import { ApiRequestError } from "../services/httpClient";
 import { getQuestions } from "../services/questionService";
 import { getSubjects } from "../services/subjectService";
@@ -31,6 +31,7 @@ export function ExamReviewPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [regeneratingQuestionId, setRegeneratingQuestionId] = useState<string | null>(null);
   const [cancellingQuestionId, setCancellingQuestionId] = useState<string | null>(null);
+  const [removingQuestionId, setRemovingQuestionId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [error, setError] = useState("");
@@ -116,6 +117,29 @@ export function ExamReviewPage() {
       setError(getErrorMessage(requestError, "Não foi possível atualizar a anulação da questão."));
     } finally {
       setCancellingQuestionId(null);
+    }
+  }
+
+  async function handleQuestionRemoval(questionId: string) {
+    if (!exam || !(await confirm({
+      confirmLabel: "Remover desta prova",
+      description: "A questão continuará no Banco de Questões. As versões A, B e C e seus gabaritos serão recriados; descarte arquivos desta prova que já tenham sido baixados ou impressos.",
+      title: "Remover questão da prova",
+      variant: "danger"
+    }))) {
+      return;
+    }
+    setRemovingQuestionId(questionId);
+    setError("");
+    setNotice("");
+    try {
+      await removeExamQuestion(exam.id, questionId);
+      await loadWorkspace();
+      setNotice("Questão removida somente desta prova. Numeração, versões e gabaritos foram atualizados.");
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "Não foi possível remover a questão desta prova."));
+    } finally {
+      setRemovingQuestionId(null);
     }
   }
 
@@ -315,6 +339,16 @@ export function ExamReviewPage() {
                           {cancellingQuestionId === question.id ? "Atualizando..." : examQuestion.isCancelled ? "Restaurar questão" : "Anular questão"}
                         </Button>
                       ) : null}
+                      {exam.status === "VERSIONS_GENERATED" ? (
+                        <Button
+                          disabled={removingQuestionId === question.id}
+                          icon={Trash2}
+                          onClick={() => void handleQuestionRemoval(question.id)}
+                          variant="danger"
+                        >
+                          {removingQuestionId === question.id ? "Removendo..." : "Remover desta prova"}
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                   <ol className="mt-4 space-y-2 text-sm text-slate-700" type="A">
@@ -332,7 +366,19 @@ export function ExamReviewPage() {
                   </p>
                 </>
               ) : (
-                <p className="text-sm text-rose-700">A questão desta prova não está disponível.</p>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-rose-700">A questão desta prova não está disponível.</p>
+                  {exam.status === "VERSIONS_GENERATED" ? (
+                    <Button
+                      disabled={removingQuestionId === examQuestion.questionId}
+                      icon={Trash2}
+                      onClick={() => void handleQuestionRemoval(examQuestion.questionId)}
+                      variant="danger"
+                    >
+                      {removingQuestionId === examQuestion.questionId ? "Removendo..." : "Remover desta prova"}
+                    </Button>
+                  ) : null}
+                </div>
               )}
             </article>
           ))}

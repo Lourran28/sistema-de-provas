@@ -45,6 +45,10 @@ export function toggleQuestionCancellation(examId: string, questionId: string) {
   return apiPost<Exam>(`/exams/${examId}/questions/${questionId}/toggle-cancellation`, {});
 }
 
+export function removeExamQuestion(examId: string, questionId: string) {
+  return apiDelete<ExamVersion[]>(`/exams/${examId}/questions/${questionId}`);
+}
+
 export function generateExamVersions(examId: string) {
   return apiPost<ExamVersion[]>(`/exams/${examId}/versions`, {});
 }

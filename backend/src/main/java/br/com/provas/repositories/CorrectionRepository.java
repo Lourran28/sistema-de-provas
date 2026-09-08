@@ -23,5 +23,7 @@ public interface CorrectionRepository extends JpaRepository<CorrectionEntity, UU
             List<UUID> examVersionIds,
             CorrectionStatus status);
 
+    boolean existsByTeacherIdAndExamVersionIdIn(UUID teacherId, List<UUID> examVersionIds);
+
     Optional<CorrectionEntity> findByIdAndTeacherId(UUID id, UUID teacherId);
 }

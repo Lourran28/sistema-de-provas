@@ -229,6 +229,11 @@ public class ExamEntity {
         this.status = ExamStatus.VERSIONS_GENERATED;
     }
 
+    public void prepareVersionRegeneration(int questionCount) {
+        this.questionCount = questionCount;
+        this.status = ExamStatus.READY;
+    }
+
     public void markApplied() {
         this.status = ExamStatus.APPLIED;
     }
