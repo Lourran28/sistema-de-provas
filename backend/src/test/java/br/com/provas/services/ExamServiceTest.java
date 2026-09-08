@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -198,9 +200,11 @@ class ExamServiceTest {
         assertEquals("2º Ano B", updated.classGroup());
         assertEquals(new BigDecimal("8.00"), updated.totalScore());
         assertEquals(2, updated.questionCount());
-        verify(examQuestionRepository).deleteByExamId(exam.getId());
         ArgumentCaptor<List<ExamQuestionEntity>> captor = ArgumentCaptor.forClass(List.class);
-        verify(examQuestionRepository).saveAll(captor.capture());
+        InOrder persistenceOrder = inOrder(examQuestionRepository);
+        persistenceOrder.verify(examQuestionRepository).deleteByExamId(exam.getId());
+        persistenceOrder.verify(examQuestionRepository).flush();
+        persistenceOrder.verify(examQuestionRepository).saveAll(captor.capture());
         assertEquals(
                 orderedQuestions.stream().map(QuestionEntity::getId).toList(),
                 captor.getValue().stream().map(ExamQuestionEntity::getQuestionId).toList());

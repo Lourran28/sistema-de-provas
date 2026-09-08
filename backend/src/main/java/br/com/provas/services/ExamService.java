@@ -158,6 +158,7 @@ public class ExamService {
                 kind);
         examRepository.save(exam);
         examQuestionRepository.deleteByExamId(examId);
+        examQuestionRepository.flush();
         persistExamQuestions(exam, questions);
         return toResponse(exam);
     }

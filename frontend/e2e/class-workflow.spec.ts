@@ -10,7 +10,7 @@ async function authenticate(page: Page) {
   await page.route("**/api/health", (route) => route.fulfill({ json: { status: "ok" } }));
 }
 
-test("correction asks only for the class", async ({ page }) => {
+test("correction requires the class and keeps the student name optional", async ({ page }) => {
   await authenticate(page);
   await page.route("**/api/exam-versions", (route) => route.fulfill({ json: [{
     id: "version-1", examId: "exam-1", examTitle: "Prova de Português", label: "A", status: "GENERATED", generatedAt: now,
@@ -19,9 +19,10 @@ test("correction asks only for the class", async ({ page }) => {
   }] }));
   await page.goto("/correcao");
   await page.getByLabel("Versão oficial").selectOption("version-1");
-  await expect(page.getByLabel("Turma", { exact: true })).toBeVisible();
+  await expect(page.locator("#correction-class")).toBeVisible();
+  await expect(page.locator("#correction-class")).toHaveAttribute("required", "");
   await expect(page.getByText("Aluno cadastrado")).toHaveCount(0);
-  await expect(page.getByText("Nome do aluno")).toHaveCount(0);
+  await expect(page.getByLabel("Nome do aluno (opcional)")).toBeVisible();
 });
 
 test("content form has the requested fields and file import", async ({ page }, testInfo) => {

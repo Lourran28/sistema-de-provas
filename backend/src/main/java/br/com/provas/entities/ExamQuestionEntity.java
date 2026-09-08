@@ -9,9 +9,13 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 @Entity
-@Table(name = "exam_questions")
+@Table(name = "exam_questions", uniqueConstraints = {
+        @UniqueConstraint(name = "uq_exam_questions_exam_question", columnNames = {"exam_id", "question_id"}),
+        @UniqueConstraint(name = "uq_exam_questions_exam_position", columnNames = {"exam_id", "position"})
+})
 public class ExamQuestionEntity {
 
     @Id
