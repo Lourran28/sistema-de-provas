@@ -29,6 +29,7 @@ import br.com.provas.dtos.exams.GenerateExamRequest;
 import br.com.provas.dtos.exams.RenameExamRequest;
 import br.com.provas.dtos.applications.ExamApplicationRequest;
 import br.com.provas.dtos.applications.ExamApplicationResponse;
+import br.com.provas.dtos.applications.UpcomingExamApplicationResponse;
 import br.com.provas.dtos.versions.ExamVersionResponse;
 import br.com.provas.security.UserPrincipal;
 import br.com.provas.services.ExamApplicationService;
@@ -147,6 +148,13 @@ public class ExamController {
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable UUID examId) {
         return examApplicationService.list(principal.id(), examId);
+    }
+
+    @GetMapping("/applications/upcoming")
+    public List<UpcomingExamApplicationResponse> listUpcomingApplications(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(defaultValue = "7") int days) {
+        return examApplicationService.listUpcoming(principal.id(), days);
     }
 
     @PostMapping("/{examId}/applications")

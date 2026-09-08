@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -91,6 +92,29 @@ class ExamApplicationServiceTest {
 
         verify(examApplicationRepository, never()).save(any());
         verify(studentService, never()).findEntity(any(), any());
+    }
+
+    @Test
+    void listsApplicationsScheduledForTheNextDays() {
+        UUID teacherId = UUID.randomUUID();
+        ExamEntity exam = officialExam(teacherId);
+        LocalDate applicationDate = LocalDate.now(ZoneId.of("America/Sao_Paulo")).plusDays(2);
+        ExamApplicationEntity application = new ExamApplicationEntity(
+                exam.getId(),
+                teacherId,
+                "2º Ano A",
+                applicationDate,
+                null);
+        when(examApplicationRepository.findAllByTeacherIdAndAppliedOnBetweenOrderByAppliedOnAscCreatedAtAsc(
+                any(), any(LocalDate.class), any(LocalDate.class))).thenReturn(List.of(application));
+        when(examRepository.findAllById(any())).thenReturn(List.of(exam));
+
+        var response = examApplicationService.listUpcoming(teacherId, 7);
+
+        assertEquals(1, response.size());
+        assertEquals(exam.getTitle(), response.getFirst().examTitle());
+        assertEquals("2º Ano A", response.getFirst().classGroup());
+        assertEquals(applicationDate, response.getFirst().appliedOn());
     }
 
     private ExamEntity officialExam(UUID teacherId) {

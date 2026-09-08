@@ -140,6 +140,15 @@ export type ExamApplication = {
   students: ExamApplicationStudent[];
 };
 
+export type UpcomingExamApplication = {
+  id: string;
+  examId: string;
+  examTitle: string;
+  examKind: ExamKind;
+  classGroup: string;
+  appliedOn: string;
+};
+
 export type ExamApplicationInput = {
   classGroup: string;
   appliedOn: string;

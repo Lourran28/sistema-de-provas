@@ -1,5 +1,7 @@
 package br.com.provas.services;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -14,6 +16,7 @@ import br.com.provas.dtos.applications.ExamApplicationRequest;
 import br.com.provas.dtos.applications.ExamApplicationResponse;
 import br.com.provas.dtos.applications.ExamApplicationStudentRequest;
 import br.com.provas.dtos.applications.ExamApplicationStudentResponse;
+import br.com.provas.dtos.applications.UpcomingExamApplicationResponse;
 import br.com.provas.entities.ExamApplicationEntity;
 import br.com.provas.entities.ExamApplicationStudentEntity;
 import br.com.provas.entities.ExamEntity;
@@ -53,6 +56,23 @@ public class ExamApplicationService {
         findExam(teacherId, examId);
         return examApplicationRepository.findAllByExamIdOrderByAppliedOnDescCreatedAtDesc(examId).stream()
                 .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<UpcomingExamApplicationResponse> listUpcoming(UUID teacherId, int days) {
+        int period = Math.min(Math.max(days, 1), 30);
+        LocalDate today = LocalDate.now(ZoneId.of("America/Sao_Paulo"));
+        List<ExamApplicationEntity> applications = examApplicationRepository
+                .findAllByTeacherIdAndAppliedOnBetweenOrderByAppliedOnAscCreatedAtAsc(teacherId, today, today.plusDays(period));
+        Map<UUID, ExamEntity> examsById = new HashMap<>();
+        examRepository.findAllById(applications.stream().map(ExamApplicationEntity::getExamId).distinct().toList())
+                .stream()
+                .filter(exam -> teacherId.equals(exam.getTeacherId()))
+                .forEach(exam -> examsById.put(exam.getId(), exam));
+        return applications.stream()
+                .filter(application -> examsById.containsKey(application.getExamId()))
+                .map(application -> UpcomingExamApplicationResponse.from(application, examsById.get(application.getExamId())))
                 .toList();
     }
 

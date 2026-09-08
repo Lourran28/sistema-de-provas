@@ -1,4 +1,4 @@
-import { BookOpenCheck, ChevronRight, ClipboardCheck, ClipboardList, Clock3, FilePlus2, FileText, ScanLine, Sparkles } from "lucide-react";
+import { BookOpenCheck, CalendarClock, ChevronRight, ClipboardCheck, ClipboardList, Clock3, FilePlus2, FileText, ScanLine, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -7,10 +7,11 @@ import { Card } from "../components/ui/Card";
 import { useAuth } from "../features/auth/useAuth";
 import { getCorrections } from "../services/correctionService";
 import { getContents } from "../services/contentService";
+import { getUpcomingExamApplications } from "../services/examApplicationService";
 import { getExams } from "../services/examService";
 import { ApiRequestError } from "../services/httpClient";
 import { getQuestions } from "../services/questionService";
-import { examStatusLabels, type Exam, type ExamPage, type ExamStatus } from "../types/exams";
+import { examKindLabels, examStatusLabels, type Exam, type ExamPage, type ExamStatus, type UpcomingExamApplication } from "../types/exams";
 import type { Correction } from "../types/corrections";
 
 const emptyExamPage: ExamPage = {
@@ -39,13 +40,14 @@ export function DashboardPage() {
   const [questionCount, setQuestionCount] = useState(0);
   const [contentCount, setContentCount] = useState(0);
   const [corrections, setCorrections] = useState<Correction[]>([]);
+  const [upcomingApplications, setUpcomingApplications] = useState<UpcomingExamApplication[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let active = true;
-    Promise.all([getExams(0, 5), getQuestions({ size: 1 }), getContents({ size: 1 }), getCorrections()])
-      .then(([nextExams, nextQuestions, nextContents, nextCorrections]) => {
+    Promise.all([getExams(0, 5), getQuestions({ size: 1 }), getContents({ size: 1 }), getCorrections(), getUpcomingExamApplications()])
+      .then(([nextExams, nextQuestions, nextContents, nextCorrections, nextApplications]) => {
         if (!active) {
           return;
         }
@@ -53,6 +55,7 @@ export function DashboardPage() {
         setQuestionCount(nextQuestions.page.totalElements);
         setContentCount(nextContents.page.totalElements);
         setCorrections(nextCorrections);
+        setUpcomingApplications(nextApplications);
       })
       .catch((requestError: unknown) => {
         if (active) {
@@ -85,6 +88,32 @@ export function DashboardPage() {
       </section>
 
       {error ? <div aria-live="polite" className="border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">{error}</div> : null}
+
+      {upcomingApplications.length > 0 ? (
+        <section aria-labelledby="upcoming-applications-title" aria-live="polite" className="border border-teal-200 bg-teal-50">
+          <header className="flex items-start gap-3 border-b border-teal-200 px-4 py-4">
+            <CalendarClock aria-hidden="true" className="mt-0.5 shrink-0 text-teal-800" size={20} />
+            <div>
+              <h2 className="font-semibold text-teal-950" id="upcoming-applications-title">Aplicações próximas</h2>
+              <p className="mt-1 text-sm text-teal-900">Você tem {upcomingApplications.length} {upcomingApplications.length === 1 ? "avaliação marcada" : "avaliações marcadas"} para os próximos 7 dias.</p>
+            </div>
+          </header>
+          <div className="divide-y divide-teal-200">
+            {upcomingApplications.map((application) => (
+              <article className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" key={application.id}>
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-950">{application.examTitle}</p>
+                  <p className="mt-1 text-sm text-slate-600">{examKindLabels[application.examKind]} · Turma {application.classGroup} · {formatApplicationDate(application.appliedOn)}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="text-sm font-semibold text-teal-900">{applicationDateLabel(application.appliedOn)}</span>
+                  <Button aria-label={`Abrir ${application.examTitle}`} className="h-9 w-9 px-0" icon={ChevronRight} onClick={() => navigate(`/provas/${application.examId}`)} title="Abrir avaliação" variant="ghost" />
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric color="teal" icon={FileText} label="Provas" value={isLoading ? "-" : String(examPage.page.totalElements)} />
@@ -199,6 +228,31 @@ function buildActivities(exams: Exam[], corrections: Correction[]): Activity[] {
 
 function firstName(name: string | undefined) {
   return name?.trim().split(/\s+/)[0] || "professor(a)";
+}
+
+function applicationDateLabel(value: string) {
+  const days = daysUntil(value);
+  if (days === 0) {
+    return "Hoje";
+  }
+  if (days === 1) {
+    return "Amanhã";
+  }
+  return `Em ${days} dias`;
+}
+
+function formatApplicationDate(value: string) {
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" }).format(dateFromIsoDay(value));
+}
+
+function daysUntil(value: string) {
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  return Math.round((dateFromIsoDay(value).getTime() - today.getTime()) / 86_400_000);
+}
+
+function dateFromIsoDay(value: string) {
+  return new Date(`${value}T12:00:00`);
 }
 
 function formatRelativeDate(value: string) {

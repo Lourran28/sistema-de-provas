@@ -1,5 +1,6 @@
 package br.com.provas.repositories;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -10,4 +11,9 @@ import br.com.provas.entities.ExamApplicationEntity;
 public interface ExamApplicationRepository extends JpaRepository<ExamApplicationEntity, UUID> {
 
     List<ExamApplicationEntity> findAllByExamIdOrderByAppliedOnDescCreatedAtDesc(UUID examId);
+
+    List<ExamApplicationEntity> findAllByTeacherIdAndAppliedOnBetweenOrderByAppliedOnAscCreatedAtAsc(
+            UUID teacherId,
+            LocalDate start,
+            LocalDate end);
 }
