@@ -23,6 +23,7 @@ export function CorrectionPage() {
   const [versions, setVersions] = useState<ExamVersion[]>([]);
   const [selectedVersion, setSelectedVersion] = useState<ExamVersion | null>(null);
   const [answers, setAnswers] = useState<Record<string, DraftAnswer>>({});
+  const [studentName, setStudentName] = useState("");
   const [classGroup, setClassGroup] = useState("");
   const [correction, setCorrection] = useState<Correction | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -91,6 +92,7 @@ export function CorrectionPage() {
     }
     return {
       examVersionId: selectedVersion.id,
+      studentName: studentName.trim() || undefined,
       classGroup: classGroup.trim(),
       answers: selectedVersion.questions.map((question) => ({
         examVersionQuestionId: question.id,
@@ -181,16 +183,20 @@ export function CorrectionPage() {
 
       {selectedVersion ? (
         <>
-          <section className="grid gap-4 border-y border-stone-200 py-6 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <section className="grid gap-4 border-y border-stone-200 py-6 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <p className="text-xs font-semibold uppercase text-teal-800">Etapa 2 · Versão selecionada</p>
               <h2 className="mt-1 text-lg font-semibold text-slate-950">{selectedVersion.examTitle} · Versão {selectedVersion.label}</h2>
             </div>
+            <label className="block text-sm font-medium text-slate-700" htmlFor="correction-student-name">
+              Nome do aluno <span className="font-normal text-slate-500">(opcional)</span>
+              <input autoComplete="name" className="mt-2 h-11 w-full border border-stone-300 bg-white px-3 font-normal outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id="correction-student-name" maxLength={180} onChange={(event) => { setStudentName(event.target.value); setCorrection(null); }} value={studentName} />
+            </label>
             <label className="block text-sm font-medium text-slate-700" htmlFor="correction-class">
-              Turma
+              Turma <span aria-hidden="true" className="text-rose-700">*</span>
               <input autoComplete="off" className="mt-2 h-11 w-full border border-stone-300 bg-white px-3 font-normal outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id="correction-class" maxLength={120} onChange={(event) => { setClassGroup(event.target.value); setCorrection(null); }} placeholder="Ex.: 8º A" required value={classGroup} />
             </label>
-            <p className="self-end pb-1 text-sm text-slate-500">{answerCount} respostas marcadas de {selectedVersion.questions.length}</p>
+            <p className="text-sm text-slate-500 sm:col-span-2">{answerCount} respostas marcadas de {selectedVersion.questions.length}</p>
           </section>
 
           <AnswerCardImportPanel key={selectedVersion.id} onImported={applyCardScan} version={selectedVersion} />
