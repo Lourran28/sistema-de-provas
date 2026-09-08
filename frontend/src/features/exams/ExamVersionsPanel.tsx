@@ -181,7 +181,9 @@ export function ExamVersionsPanel({ exam, onVersionsGenerated }: ExamVersionsPan
                     <ol className="mt-3 space-y-2 text-sm text-slate-700" type="A">
                       {question.alternatives.map((alternative, alternativeIndex) => (
                         <li className="flex items-start gap-2 pl-1" key={alternative.alternativeId}>
-                          <span className="shrink-0 font-medium text-slate-600">{letterFor(alternativeIndex + 1)})</span>
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-teal-200 bg-teal-50 text-xs font-bold text-teal-800">
+                            {letterFor(alternativeIndex + 1)}
+                          </span>
                           <span>{alternative.text}</span>
                           {answer?.correctAlternativeId === alternative.alternativeId ? (
                             <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-xs font-medium text-emerald-800">Correta</span>

@@ -339,7 +339,7 @@ export function ExamReviewPage() {
                           {cancellingQuestionId === question.id ? "Atualizando..." : examQuestion.isCancelled ? "Restaurar questão" : "Anular questão"}
                         </Button>
                       ) : null}
-                      {exam.status === "VERSIONS_GENERATED" ? (
+                      {exam.status === "VERSIONS_GENERATED" || exam.status === "APPLIED" ? (
                         <Button
                           disabled={removingQuestionId === question.id}
                           icon={Trash2}
@@ -368,7 +368,7 @@ export function ExamReviewPage() {
               ) : (
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm text-rose-700">A questão desta prova não está disponível.</p>
-                  {exam.status === "VERSIONS_GENERATED" ? (
+                  {exam.status === "VERSIONS_GENERATED" || exam.status === "APPLIED" ? (
                     <Button
                       disabled={removingQuestionId === examQuestion.questionId}
                       icon={Trash2}

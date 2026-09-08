@@ -235,6 +235,7 @@ class ExamVersionServiceTest {
         configurePersistence();
         Fixture fixture = fixture(true);
         fixture.exam().markVersionsGenerated();
+        fixture.exam().markApplied();
         List<ExamQuestionEntity> originalQuestions = examQuestionRepository
                 .findAllByExamIdOrderByPositionAsc(fixture.exam().getId());
         ExamQuestionEntity questionToRemove = originalQuestions.get(1);

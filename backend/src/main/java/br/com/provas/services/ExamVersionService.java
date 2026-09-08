@@ -89,7 +89,7 @@ public class ExamVersionService {
     @Transactional
     public List<ExamVersionResponse> removeQuestionAndRegenerate(UUID teacherId, UUID examId, UUID questionId) {
         ExamEntity exam = findExam(teacherId, examId);
-        if (exam.getStatus() != ExamStatus.VERSIONS_GENERATED) {
+        if (exam.getStatus() != ExamStatus.VERSIONS_GENERATED && exam.getStatus() != ExamStatus.APPLIED) {
             throw new IllegalStateException("A questão só pode ser removida depois de gerar as versões e antes de registrar a aplicação.");
         }
         if (exam.getKind() == ExamKind.SIMULADO) {
