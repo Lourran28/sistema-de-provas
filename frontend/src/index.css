@@ -271,10 +271,14 @@ a {
 
 .answer-card-marker {
   background: #111827;
+  border: 3.5mm solid #111827;
+  box-sizing: border-box;
   display: block;
   height: var(--answer-card-marker-size);
   position: absolute;
   width: var(--answer-card-marker-size);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 
 .answer-card-marker--top-left {

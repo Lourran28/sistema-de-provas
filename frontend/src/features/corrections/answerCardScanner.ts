@@ -8,6 +8,8 @@ const MARKER_SIZE_MM = 7;
 const FRAME_PADDING_MM = 12;
 const BUBBLE_RADIUS_MM = (17 / 96) * 25.4 / 2;
 const QUESTION_COLUMN_RATIO = 0.24;
+const BUBBLE_RADIUS_RATIO = BUBBLE_RADIUS_MM / TABLE_WIDTH_MM;
+const TABLE_DETECTION_THRESHOLDS = [185, 165, 205];
 
 type Point = {
   x: number;
@@ -24,6 +26,22 @@ type MarkerFrame = {
   topRight: Point;
   bottomLeft: Point;
   bottomRight: Point;
+};
+
+type CardGeometry = {
+  frame: MarkerFrame;
+  pointAt: HomographyTransform;
+};
+
+type TableFrameCandidate = {
+  area: number;
+  density: number;
+  frame: MarkerFrame;
+};
+
+type BubbleSample = {
+  fill: number;
+  ring: number;
 };
 
 export type ImportedAnswer = {
@@ -65,25 +83,24 @@ export async function scanAnswerCard(file: File, version: ExamVersion): Promise<
   }
 
   const imageData = context.getImageData(0, 0, width, height);
-  const frame = findMarkerFrame(imageData);
-  if (!frame) {
-    throw new Error("Não encontrei os quatro marcadores do cartão. Fotografe o cartão inteiro, reto e bem iluminado.");
-  }
-
   const alternativeCount = Math.max(2, ...version.questions.map((question) => question.alternatives.length));
   const tableHeightMm = (version.questions.length + 1) * ROW_HEIGHT_MM;
-  const transform = buildHomography(frame);
+  const geometry = findCardGeometry(imageData, version, alternativeCount, tableHeightMm);
+  if (!geometry) {
+    throw new Error("Não encontrei a grade do cartão. Fotografe a folha inteira, com boa luz e sem cobrir a tabela.");
+  }
+
   const answers = version.questions.map((question, questionIndex) => {
     const options = question.alternatives.map((alternative, alternativeIndex) => {
-      const xMm = TABLE_WIDTH_MM * (QUESTION_COLUMN_RATIO + ((alternativeIndex + 0.5) * (1 - QUESTION_COLUMN_RATIO)) / alternativeCount);
-      const yMm = ROW_HEIGHT_MM * (questionIndex + 1.5);
-      const center = pointAtTablePosition(transform, xMm, yMm, tableHeightMm);
-      const radius = Math.max(5, distance(center, pointAtTablePosition(transform, xMm + BUBBLE_RADIUS_MM, yMm, tableHeightMm)));
+      const u = alternativePosition(alternativeIndex, alternativeCount);
+      const v = questionPosition(questionIndex, version.questions.length);
+      const center = geometry.pointAt(u, v);
+      const radius = Math.max(4, distance(center, geometry.pointAt(u + BUBBLE_RADIUS_RATIO, v)));
       return {
         alternativeId: alternative.alternativeId,
         center,
         radius,
-        fill: sampleFill(imageData, center, radius)
+        fill: sampleBubble(imageData, center, radius).fill
       };
     });
 
@@ -91,13 +108,13 @@ export async function scanAnswerCard(file: File, version: ExamVersion): Promise<
     const strongest = ordered[0];
     const secondStrongest = ordered[1];
     const difference = strongest.fill - (secondStrongest?.fill ?? 0);
-    const confidence = Math.max(0, Math.min(1, strongest.fill * 0.7 + difference * 1.15));
+    const confidence = Math.max(0, Math.min(1, strongest.fill * 0.9 + difference * 1.5));
 
     let status: ImportedAnswer["status"] = "NEEDS_REVIEW";
     let selectedAlternativeId: string | null = null;
-    if (strongest.fill < 0.1) {
+    if (strongest.fill < 0.12) {
       status = "BLANK";
-    } else if (strongest.fill >= 0.27 && difference >= 0.12) {
+    } else if (strongest.fill >= 0.19 && difference >= 0.09) {
       status = "DETECTED";
       selectedAlternativeId = strongest.alternativeId;
     }
@@ -112,7 +129,7 @@ export async function scanAnswerCard(file: File, version: ExamVersion): Promise<
     };
   });
 
-  drawScanOverlay(context, frame, answers);
+  drawScanOverlay(context, geometry.frame, answers);
 
   return {
     answers: answers.map(({ questionId, selectedAlternativeId, status, confidence }) => ({ questionId, selectedAlternativeId, status, confidence })),
@@ -123,6 +140,255 @@ export async function scanAnswerCard(file: File, version: ExamVersion): Promise<
     imageWidth: width,
     imageHeight: height
   };
+}
+
+function findCardGeometry(
+  imageData: ImageData,
+  version: ExamVersion,
+  alternativeCount: number,
+  tableHeightMm: number
+): CardGeometry | null {
+  const tableGeometry = findTableGeometry(imageData, version, alternativeCount, tableHeightMm);
+  if (tableGeometry) {
+    return tableGeometry;
+  }
+
+  const markerFrame = findMarkerFrame(imageData);
+  if (!markerFrame) {
+    return null;
+  }
+
+  const markerTransform = buildHomography(markerFrame);
+  const pointAt = (u: number, v: number) => pointAtTablePosition(
+    markerTransform,
+    u * TABLE_WIDTH_MM,
+    v * tableHeightMm,
+    tableHeightMm
+  );
+
+  return scoreBubbleLayout(imageData, pointAt, version, alternativeCount) >= 0.025
+    ? { frame: markerFrame, pointAt }
+    : null;
+}
+
+function findTableGeometry(
+  imageData: ImageData,
+  version: ExamVersion,
+  alternativeCount: number,
+  tableHeightMm: number
+): CardGeometry | null {
+  const expectedAspectRatio = TABLE_WIDTH_MM / tableHeightMm;
+  const matches: Array<{ geometry: CardGeometry; layoutScore: number; score: number }> = [];
+
+  for (const threshold of TABLE_DETECTION_THRESHOLDS) {
+    const candidates = findTableFrameCandidates(imageData, threshold);
+    for (const candidate of candidates) {
+      for (let rotation = 0; rotation < 4; rotation += 1) {
+        const frame = rotateFrame(candidate.frame, rotation);
+        const frameWidth = (distance(frame.topLeft, frame.topRight) + distance(frame.bottomLeft, frame.bottomRight)) / 2;
+        const frameHeight = (distance(frame.topLeft, frame.bottomLeft) + distance(frame.topRight, frame.bottomRight)) / 2;
+        if (frameWidth <= 0 || frameHeight <= 0) {
+          continue;
+        }
+
+        const aspectScore = Math.exp(-Math.abs(Math.log((frameWidth / frameHeight) / expectedAspectRatio)) * 2.4);
+        if (aspectScore < 0.34) {
+          continue;
+        }
+
+        const pointAt = buildHomography(frame);
+        const layoutScore = scoreBubbleLayout(imageData, pointAt, version, alternativeCount);
+        const areaScore = Math.min(1, candidate.area / (imageData.width * imageData.height * 0.12));
+        const densityScore = Math.min(1, candidate.density / 0.07);
+        const score = layoutScore * 8 + aspectScore * 0.35 + areaScore * 0.08 + densityScore * 0.05;
+
+        matches.push({ geometry: { frame, pointAt }, layoutScore, score });
+      }
+    }
+
+    matches.sort((left, right) => right.score - left.score);
+    if (matches[0]?.layoutScore >= 0.055) {
+      break;
+    }
+  }
+
+  const best = matches[0];
+  return best?.layoutScore >= 0.028 ? best.geometry : null;
+}
+
+function findTableFrameCandidates(imageData: ImageData, luminanceThreshold: number): TableFrameCandidate[] {
+  const { width, height, data } = imageData;
+  const pixelCount = width * height;
+  const darkPixels = new Uint8Array(pixelCount);
+  const visited = new Uint8Array(pixelCount);
+  const stack = new Int32Array(pixelCount);
+
+  for (let index = 0; index < pixelCount; index += 1) {
+    const offset = index * 4;
+    const luminance = data[offset] * 0.2126 + data[offset + 1] * 0.7152 + data[offset + 2] * 0.0722;
+    darkPixels[index] = luminance < luminanceThreshold ? 1 : 0;
+  }
+
+  const candidates: TableFrameCandidate[] = [];
+  const imageArea = pixelCount;
+  const minimumSide = Math.min(width, height) * 0.06;
+
+  for (let start = 0; start < pixelCount; start += 1) {
+    if (!darkPixels[start] || visited[start]) {
+      continue;
+    }
+
+    let stackSize = 0;
+    stack[stackSize] = start;
+    stackSize += 1;
+    visited[start] = 1;
+
+    let count = 0;
+    let minX = width;
+    let maxX = 0;
+    let minY = height;
+    let maxY = 0;
+    let minSum = Number.POSITIVE_INFINITY;
+    let maxSum = Number.NEGATIVE_INFINITY;
+    let minDifference = Number.POSITIVE_INFINITY;
+    let maxDifference = Number.NEGATIVE_INFINITY;
+    let minSumPoint: Point = { x: 0, y: 0 };
+    let maxSumPoint: Point = { x: 0, y: 0 };
+    let minDifferencePoint: Point = { x: 0, y: 0 };
+    let maxDifferencePoint: Point = { x: 0, y: 0 };
+
+    while (stackSize > 0) {
+      stackSize -= 1;
+      const index = stack[stackSize];
+      const y = Math.floor(index / width);
+      const x = index - y * width;
+      count += 1;
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+
+      const sum = x + y;
+      const difference = x - y;
+      if (sum < minSum) {
+        minSum = sum;
+        minSumPoint = { x, y };
+      }
+      if (sum > maxSum) {
+        maxSum = sum;
+        maxSumPoint = { x, y };
+      }
+      if (difference < minDifference) {
+        minDifference = difference;
+        minDifferencePoint = { x, y };
+      }
+      if (difference > maxDifference) {
+        maxDifference = difference;
+        maxDifferencePoint = { x, y };
+      }
+
+      const fromY = Math.max(0, y - 1);
+      const toY = Math.min(height - 1, y + 1);
+      const fromX = Math.max(0, x - 1);
+      const toX = Math.min(width - 1, x + 1);
+      for (let neighborY = fromY; neighborY <= toY; neighborY += 1) {
+        for (let neighborX = fromX; neighborX <= toX; neighborX += 1) {
+          const neighbor = neighborY * width + neighborX;
+          if (darkPixels[neighbor] && !visited[neighbor]) {
+            visited[neighbor] = 1;
+            stack[stackSize] = neighbor;
+            stackSize += 1;
+          }
+        }
+      }
+    }
+
+    if (count < 240) {
+      continue;
+    }
+
+    const boundingArea = (maxX - minX + 1) * (maxY - minY + 1);
+    if (boundingArea < imageArea * 0.006 || boundingArea > imageArea * 0.68) {
+      continue;
+    }
+
+    const frame: MarkerFrame = {
+      topLeft: minSumPoint,
+      topRight: maxDifferencePoint,
+      bottomRight: maxSumPoint,
+      bottomLeft: minDifferencePoint
+    };
+    const frameArea = polygonArea([frame.topLeft, frame.topRight, frame.bottomRight, frame.bottomLeft]);
+    const sideLengths = [
+      distance(frame.topLeft, frame.topRight),
+      distance(frame.topRight, frame.bottomRight),
+      distance(frame.bottomRight, frame.bottomLeft),
+      distance(frame.bottomLeft, frame.topLeft)
+    ];
+    const density = count / Math.max(1, frameArea);
+    if (
+      frameArea < imageArea * 0.005
+      || frameArea > imageArea * 0.65
+      || Math.min(...sideLengths) < minimumSide
+      || density < 0.008
+      || density > 0.36
+    ) {
+      continue;
+    }
+
+    candidates.push({ area: frameArea, density, frame });
+  }
+
+  return candidates.sort((left, right) => right.area * right.density - left.area * left.density).slice(0, 12);
+}
+
+function scoreBubbleLayout(
+  imageData: ImageData,
+  pointAt: HomographyTransform,
+  version: ExamVersion,
+  alternativeCount: number
+) {
+  let score = 0;
+  let sampleCount = 0;
+
+  version.questions.forEach((question, questionIndex) => {
+    question.alternatives.forEach((_, alternativeIndex) => {
+      const u = alternativePosition(alternativeIndex, alternativeCount);
+      const v = questionPosition(questionIndex, version.questions.length);
+      const center = pointAt(u, v);
+      const radius = Math.max(4, distance(center, pointAt(u + BUBBLE_RADIUS_RATIO, v)));
+      const sample = sampleBubble(imageData, center, radius);
+      score += Math.max(0, sample.ring) * 0.82 + Math.max(0, sample.fill) * 0.28;
+      sampleCount += 1;
+    });
+  });
+
+  return sampleCount ? score / sampleCount : 0;
+}
+
+function rotateFrame(frame: MarkerFrame, rotation: number): MarkerFrame {
+  const corners = [frame.topLeft, frame.topRight, frame.bottomRight, frame.bottomLeft];
+  return {
+    topLeft: corners[rotation % 4],
+    topRight: corners[(rotation + 1) % 4],
+    bottomRight: corners[(rotation + 2) % 4],
+    bottomLeft: corners[(rotation + 3) % 4]
+  };
+}
+
+function alternativePosition(index: number, alternativeCount: number) {
+  return QUESTION_COLUMN_RATIO + ((index + 0.5) * (1 - QUESTION_COLUMN_RATIO)) / alternativeCount;
+}
+
+function questionPosition(index: number, questionCount: number) {
+  return (index + 1.5) / (questionCount + 1);
+}
+
+function polygonArea(points: Point[]) {
+  return Math.abs(points.reduce((area, point, index) => {
+    const next = points[(index + 1) % points.length];
+    return area + point.x * next.y - next.x * point.y;
+  }, 0)) / 2;
 }
 
 function findMarkerFrame(imageData: ImageData): MarkerFrame | null {
@@ -288,49 +554,57 @@ function pointAtTablePosition(transform: HomographyTransform, xMm: number, yMm: 
   return transform(Math.max(0, Math.min(1, u)), Math.max(0, Math.min(1, v)));
 }
 
-function sampleFill(imageData: ImageData, center: Point, radius: number) {
+function sampleBubble(imageData: ImageData, center: Point, radius: number): BubbleSample {
   const { width, height, data } = imageData;
-  const innerRadius = Math.max(3, radius * 0.65);
-  const outerRadiusMin = radius * 0.95;
-  const outerRadiusMax = radius * 1.55;
+  const innerRadius = Math.max(2.5, radius * 0.62);
+  const ringRadiusMin = radius * 0.78;
+  const ringRadiusMax = radius * 1.22;
+  const backgroundRadiusMin = radius * 1.38;
+  const backgroundRadiusMax = radius * 1.75;
 
-  const minX = Math.max(0, Math.floor(center.x - outerRadiusMax));
-  const maxX = Math.min(width - 1, Math.ceil(center.x + outerRadiusMax));
-  const minY = Math.max(0, Math.floor(center.y - outerRadiusMax));
-  const maxY = Math.min(height - 1, Math.ceil(center.y + outerRadiusMax));
+  const minX = Math.max(0, Math.floor(center.x - backgroundRadiusMax));
+  const maxX = Math.min(width - 1, Math.ceil(center.x + backgroundRadiusMax));
+  const minY = Math.max(0, Math.floor(center.y - backgroundRadiusMax));
+  const maxY = Math.min(height - 1, Math.ceil(center.y + backgroundRadiusMax));
 
-  let innerLuminanceSum = 0;
+  let innerDarknessSum = 0;
   let innerPixels = 0;
-  let backgroundLuminanceSum = 0;
+  let ringDarknessSum = 0;
+  let ringPixels = 0;
+  let backgroundDarknessSum = 0;
   let backgroundPixels = 0;
-  let darkPixelCount = 0;
 
   for (let y = minY; y <= maxY; y += 1) {
     for (let x = minX; x <= maxX; x += 1) {
-      const distSq = (x - center.x) ** 2 + (y - center.y) ** 2;
+      const normalizedDistance = Math.hypot(x - center.x, y - center.y) / radius;
       const offset = (y * width + x) * 4;
       const luminance = data[offset] * 0.2126 + data[offset + 1] * 0.7152 + data[offset + 2] * 0.0722;
+      const darkness = 1 - luminance / 255;
 
-      if (distSq <= innerRadius ** 2) {
-        innerLuminanceSum += luminance;
+      if (normalizedDistance <= innerRadius / radius) {
+        innerDarknessSum += darkness;
         innerPixels += 1;
-        if (luminance < 155) {
-          darkPixelCount += 1;
-        }
-      } else if (distSq >= outerRadiusMin ** 2 && distSq <= outerRadiusMax ** 2) {
-        backgroundLuminanceSum += luminance;
+      } else if (normalizedDistance >= ringRadiusMin / radius && normalizedDistance <= ringRadiusMax / radius) {
+        ringDarknessSum += darkness;
+        ringPixels += 1;
+      } else if (
+        normalizedDistance >= backgroundRadiusMin / radius
+        && normalizedDistance <= backgroundRadiusMax / radius
+      ) {
+        backgroundDarknessSum += darkness;
         backgroundPixels += 1;
       }
     }
   }
 
-  const avgInner = innerPixels ? innerLuminanceSum / innerPixels : 255;
-  const avgBg = backgroundPixels ? backgroundLuminanceSum / backgroundPixels : 240;
-  const relativeContrast = Math.max(0, (avgBg - avgInner) / 255);
-  const absoluteDarkness = innerPixels ? darkPixelCount / innerPixels : 0;
+  const innerDarkness = innerPixels ? innerDarknessSum / innerPixels : 0;
+  const ringDarkness = ringPixels ? ringDarknessSum / ringPixels : 0;
+  const backgroundDarkness = backgroundPixels ? backgroundDarknessSum / backgroundPixels : 0;
 
-  // Composite fill score balancing local relative contrast and raw darkness
-  return Math.min(1, relativeContrast * 0.75 + absoluteDarkness * 0.55);
+  return {
+    fill: Math.max(0, Math.min(1, innerDarkness - backgroundDarkness)),
+    ring: Math.max(-1, Math.min(1, ringDarkness - backgroundDarkness))
+  };
 }
 
 function drawScanOverlay(
