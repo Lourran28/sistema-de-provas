@@ -45,6 +45,9 @@ public class StudentAnswerEntity {
     @Column(name = "is_correct")
     private Boolean correct;
 
+    @Column(name = "awarded_points", precision = 10, scale = 2)
+    private BigDecimal awardedPoints;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -61,6 +64,17 @@ public class StudentAnswerEntity {
             String rawDetectedValue,
             StudentAnswerStatus status,
             Boolean correct) {
+        this(correctionId, examVersionQuestionId, selectedAlternativeId, rawDetectedValue, status, correct, null);
+    }
+
+    public StudentAnswerEntity(
+            UUID correctionId,
+            UUID examVersionQuestionId,
+            UUID selectedAlternativeId,
+            String rawDetectedValue,
+            StudentAnswerStatus status,
+            Boolean correct,
+            BigDecimal awardedPoints) {
         this.id = UUID.randomUUID();
         this.correctionId = correctionId;
         this.examVersionQuestionId = examVersionQuestionId;
@@ -69,6 +83,7 @@ public class StudentAnswerEntity {
         this.rawDetectedValue = rawDetectedValue;
         this.status = status;
         this.correct = correct;
+        this.awardedPoints = awardedPoints;
     }
 
     @PrePersist
@@ -124,5 +139,9 @@ public class StudentAnswerEntity {
 
     public Boolean getCorrect() {
         return correct;
+    }
+
+    public BigDecimal getAwardedPoints() {
+        return awardedPoints;
     }
 }

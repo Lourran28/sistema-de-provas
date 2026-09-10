@@ -26,10 +26,11 @@ export function CorrectionDetails({ correction }: { correction: Correction }) {
         {correction.answers.map((answer) => (
           <li className="border border-stone-200 px-3 py-2 text-sm" key={answer.examVersionQuestionId}>
             <strong className="text-slate-950">{String(answer.questionPosition).padStart(2, "0")}</strong>
-            <span className="ml-2 text-slate-500">{answer.selectedLetter || "-"} / {answer.correctLetter}</span>
-            <span className={answer.cancelled ? "ml-2 font-semibold text-amber-800" : answer.correct ? "ml-2 font-semibold text-emerald-700" : answer.status === "NEEDS_REVIEW" || answer.status === "AMBIGUOUS" ? "ml-2 font-semibold text-amber-700" : answer.status === "BLANK" ? "ml-2 font-semibold text-slate-600" : "ml-2 font-semibold text-rose-700"}>
-              {answer.cancelled ? "Anulada" : answer.correct ? "Certa" : answer.status === "NEEDS_REVIEW" || answer.status === "AMBIGUOUS" ? "Revisar" : answer.status === "BLANK" ? "Em branco" : "Errada"}
-            </span>
+            {answer.questionType === "DISCURSIVE" ? (
+              <span className={answer.cancelled ? "ml-2 font-semibold text-amber-800" : answer.awardedPoints === null ? "ml-2 font-semibold text-amber-700" : "ml-2 font-semibold text-teal-800"}>
+                {answer.cancelled ? "Anulada" : answer.awardedPoints === null ? "Nota pendente" : `${formatScore(answer.awardedPoints)} / ${formatScore(answer.maxPoints)}`}
+              </span>
+            ) : <><span className="ml-2 text-slate-500">{answer.selectedLetter || "-"} / {answer.correctLetter}</span><span className={answer.cancelled ? "ml-2 font-semibold text-amber-800" : answer.correct ? "ml-2 font-semibold text-emerald-700" : answer.status === "NEEDS_REVIEW" || answer.status === "AMBIGUOUS" ? "ml-2 font-semibold text-amber-700" : answer.status === "BLANK" ? "ml-2 font-semibold text-slate-600" : "ml-2 font-semibold text-rose-700"}>{answer.cancelled ? "Anulada" : answer.correct ? "Certa" : answer.status === "NEEDS_REVIEW" || answer.status === "AMBIGUOUS" ? "Revisar" : answer.status === "BLANK" ? "Em branco" : "Errada"}</span></>}
           </li>
         ))}
       </ol>

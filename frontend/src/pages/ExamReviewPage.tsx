@@ -322,6 +322,7 @@ export function ExamReviewPage() {
                         {examQuestion.isCancelled ? <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-900">Anulada</span> : null}
                       </div>
                       <h3 className="mt-2 text-base font-semibold leading-6 text-slate-950"><MathText text={question.statement} /></h3>
+                      {question.questionType === "DISCURSIVE" ? <p className="mt-3 text-sm font-medium text-teal-800">Questão aberta · correção manual</p> : null}
                       {question.imageUrl ? <img alt={`Imagem de apoio da questão ${examQuestion.position}`} className="mt-4 max-h-80 w-full border border-stone-200 bg-stone-50 object-contain sm:max-w-xl" loading="lazy" referrerPolicy="no-referrer" src={question.imageUrl} /> : null}
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">

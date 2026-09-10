@@ -26,6 +26,7 @@ import br.com.provas.entities.ExamQuestionEntity;
 import br.com.provas.entities.ExamVersionAlternativeEntity;
 import br.com.provas.entities.ExamVersionEntity;
 import br.com.provas.entities.ExamVersionQuestionEntity;
+import br.com.provas.entities.QuestionType;
 import br.com.provas.entities.StudentAnswerEntity;
 import br.com.provas.entities.StudentAnswerStatus;
 import br.com.provas.entities.StudentEntity;
@@ -189,12 +190,20 @@ public class CorrectionService {
                     }
                     ExamQuestionEntity examQuestion = context.examQuestionsById().get(versionQuestion.getExamQuestionId());
                     boolean isCancelled = examQuestion != null && examQuestion.isCancelled();
+                    boolean isDiscursive = versionQuestion.getQuestionType() == QuestionType.DISCURSIVE;
 
                     if (isCancelled) {
                         answer.setCorrect(true);
                         correctCount++;
                         if (examQuestion != null && examQuestion.getPoints() != null) {
                             score = score.add(examQuestion.getPoints());
+                        }
+                    } else if (isDiscursive) {
+                        answer.setCorrect(null);
+                        if (answer.getAwardedPoints() == null) {
+                            ambiguousCount++;
+                        } else {
+                            score = score.add(answer.getAwardedPoints());
                         }
                     } else if (answer.getStatus() == StudentAnswerStatus.BLANK) {
                         blankCount++;
@@ -258,9 +267,16 @@ public class CorrectionService {
 
         for (ExamVersionQuestionEntity question : context.questionsById().values()) {
             CorrectionAnswerRequest answer = requestByQuestionId.get(question.getId());
-            SelectedAnswer selected = resolveSelectedAnswer(context, question, answer);
             ExamQuestionEntity examQuestion = context.examQuestionsById().get(question.getExamQuestionId());
             boolean isCancelled = examQuestion != null && examQuestion.isCancelled();
+            boolean isDiscursive = question.getQuestionType() == QuestionType.DISCURSIVE;
+            SelectedAnswer selected = isDiscursive
+                    ? validateDiscursiveAnswer(answer, examQuestion)
+                    : resolveSelectedAnswer(context, question, answer);
+            BigDecimal awardedPoints = isDiscursive ? answer.awardedPoints() : null;
+            if (!isDiscursive && answer.awardedPoints() != null) {
+                throw new IllegalArgumentException("A nota manual só pode ser informada em questões abertas.");
+            }
             Boolean correct = null;
 
             if (isCancelled) {
@@ -273,6 +289,12 @@ public class CorrectionService {
                     blankCount++;
                 } else if (answer.status() == StudentAnswerStatus.AMBIGUOUS || answer.status() == StudentAnswerStatus.NEEDS_REVIEW) {
                     ambiguousCount++;
+                }
+            } else if (isDiscursive) {
+                if (awardedPoints == null) {
+                    ambiguousCount++;
+                } else {
+                    score = score.add(awardedPoints);
                 }
             } else if (answer.status() == StudentAnswerStatus.BLANK) {
                 blankCount++;
@@ -296,7 +318,8 @@ public class CorrectionService {
                     selected.alternativeId(),
                     selected.letter(),
                     answer.status(),
-                    correct));
+                    correct,
+                    awardedPoints));
         }
 
         return new Draft(
@@ -345,6 +368,19 @@ public class CorrectionService {
         return new SelectedAnswer(selectedAlternativeId, letterFor(alternative.getPosition()));
     }
 
+    private SelectedAnswer validateDiscursiveAnswer(CorrectionAnswerRequest answer, ExamQuestionEntity examQuestion) {
+        if (answer.selectedAlternativeId() != null || answer.status() == StudentAnswerStatus.DETECTED) {
+            throw new IllegalArgumentException("Questões abertas não recebem uma alternativa do cartão-resposta.");
+        }
+        if (answer.awardedPoints() != null
+                && examQuestion != null
+                && examQuestion.getPoints() != null
+                && answer.awardedPoints().compareTo(examQuestion.getPoints()) > 0) {
+            throw new IllegalArgumentException("A nota da questão aberta não pode ultrapassar o valor da questão.");
+        }
+        return new SelectedAnswer(null, null);
+    }
+
     private VersionContext loadVersionContext(UUID teacherId, UUID versionId) {
         ExamVersionEntity version = examVersionRepository.findById(versionId)
                 .orElseThrow(() -> new NotFoundException("Versão da prova não encontrada."));
@@ -361,6 +397,9 @@ public class CorrectionService {
         }
 
         Map<UUID, List<ExamVersionAlternativeEntity>> alternativesByQuestionId = new HashMap<>();
+        for (ExamVersionQuestionEntity question : questions) {
+            alternativesByQuestionId.put(question.getId(), new ArrayList<>());
+        }
         List<UUID> questionIds = questions.stream().map(ExamVersionQuestionEntity::getId).toList();
         List<UUID> alternativeIds = new ArrayList<>();
         for (ExamVersionAlternativeEntity link : examVersionAlternativeRepository
@@ -368,8 +407,14 @@ public class CorrectionService {
             alternativesByQuestionId.computeIfAbsent(link.getExamVersionQuestionId(), ignored -> new ArrayList<>()).add(link);
             alternativeIds.add(link.getAlternativeId());
         }
-        if (!alternativesByQuestionId.keySet().equals(questionsById.keySet())) {
-            throw new IllegalStateException("A versão possui questões sem alternativas persistidas.");
+        for (ExamVersionQuestionEntity question : questions) {
+            List<ExamVersionAlternativeEntity> alternatives = alternativesByQuestionId.get(question.getId());
+            if (question.getQuestionType() != QuestionType.DISCURSIVE && alternatives.size() < 2) {
+                throw new IllegalStateException("A versão possui questões objetivas sem alternativas persistidas.");
+            }
+            if (question.getQuestionType() == QuestionType.DISCURSIVE && !alternatives.isEmpty()) {
+                throw new IllegalStateException("A versão possui uma questão aberta com alternativas inválidas.");
+            }
         }
         Map<UUID, AlternativeEntity> alternativesById = new HashMap<>();
         for (AlternativeEntity alternative : alternativeRepository.findAllById(alternativeIds)) {
@@ -385,7 +430,13 @@ public class CorrectionService {
         for (AnswerKeyItemEntity item : answerKeyItemRepository.findAllByAnswerKeyIdOrderByQuestionPositionAsc(answerKey.getId())) {
             correctAlternativeByQuestionId.put(item.getExamVersionQuestionId(), item.getCorrectAlternativeId());
         }
-        if (!correctAlternativeByQuestionId.keySet().equals(questionsById.keySet())) {
+        Set<UUID> objectiveQuestionIds = new HashSet<>();
+        for (ExamVersionQuestionEntity question : questions) {
+            if (question.getQuestionType() != QuestionType.DISCURSIVE) {
+                objectiveQuestionIds.add(question.getId());
+            }
+        }
+        if (!correctAlternativeByQuestionId.keySet().equals(objectiveQuestionIds)) {
             throw new IllegalStateException("O gabarito da versão está incompleto.");
         }
 
@@ -419,6 +470,13 @@ public class CorrectionService {
         for (StudentAnswerEntity answer : answers) {
             if (!context.questionsById().containsKey(answer.getExamVersionQuestionId()) || !questionIds.add(answer.getExamVersionQuestionId())) {
                 throw new IllegalStateException("A correção possui respostas inválidas e não pode ser confirmada.");
+            }
+            ExamVersionQuestionEntity versionQuestion = context.questionsById().get(answer.getExamVersionQuestionId());
+            ExamQuestionEntity examQuestion = context.examQuestionsById().get(versionQuestion.getExamQuestionId());
+            if (versionQuestion.getQuestionType() == QuestionType.DISCURSIVE
+                    && (examQuestion == null || !examQuestion.isCancelled())
+                    && answer.getAwardedPoints() == null) {
+                throw new IllegalStateException("Informe a nota de todas as questões abertas antes de confirmar a correção.");
             }
         }
     }
@@ -462,6 +520,7 @@ public class CorrectionService {
         if (answer == null) {
             throw new IllegalStateException("A correção está sem resposta para uma questão da versão.");
         }
+        boolean isDiscursive = question.getQuestionType() == QuestionType.DISCURSIVE;
         String selectedLetter = answer.getFinalAlternativeId() == null
                 ? null
                 : context.alternativesByQuestionId().get(question.getId()).stream()
@@ -470,20 +529,26 @@ public class CorrectionService {
                         .map(link -> letterFor(link.getPosition()))
                         .orElseThrow(() -> new IllegalStateException("A correção possui uma alternativa inválida."));
         UUID correctAlternativeId = context.correctAlternativeByQuestionId().get(question.getId());
-        String correctLetter = context.alternativesByQuestionId().get(question.getId()).stream()
-                .filter(link -> link.getAlternativeId().equals(correctAlternativeId))
-                .findFirst()
-                .map(link -> letterFor(link.getPosition()))
-                .orElseThrow(() -> new IllegalStateException("O gabarito possui uma alternativa inválida."));
+        String correctLetter = isDiscursive
+                ? null
+                : context.alternativesByQuestionId().get(question.getId()).stream()
+                        .filter(link -> link.getAlternativeId().equals(correctAlternativeId))
+                        .findFirst()
+                        .map(link -> letterFor(link.getPosition()))
+                        .orElseThrow(() -> new IllegalStateException("O gabarito possui uma alternativa inválida."));
+        ExamQuestionEntity examQuestion = context.examQuestionsById().get(question.getExamQuestionId());
         return new CorrectionAnswerResponse(
                 question.getId(),
                 question.getPosition(),
                 answer.getFinalAlternativeId(),
                 selectedLetter,
                 correctLetter,
+                question.getQuestionType(),
+                answer.getAwardedPoints(),
+                examQuestion.getPoints(),
                 answer.getStatus(),
                 answer.getCorrect(),
-                context.examQuestionsById().get(question.getExamQuestionId()).isCancelled());
+                examQuestion.isCancelled());
     }
 
     private CorrectionEntity findCorrection(UUID teacherId, UUID correctionId) {

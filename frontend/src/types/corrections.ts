@@ -5,6 +5,7 @@ export type CorrectionAnswerInput = {
   examVersionQuestionId: string;
   selectedAlternativeId: string | null;
   status: Exclude<StudentAnswerStatus, "CONFIRMED">;
+  awardedPoints?: number | null;
 };
 
 export type CorrectionInput = {
@@ -21,7 +22,10 @@ export type CorrectionAnswer = {
   questionPosition: number;
   selectedAlternativeId: string | null;
   selectedLetter: string | null;
-  correctLetter: string;
+  correctLetter: string | null;
+  questionType: QuestionType;
+  awardedPoints: number | null;
+  maxPoints: number;
   status: StudentAnswerStatus;
   correct: boolean | null;
   cancelled: boolean;
@@ -47,3 +51,4 @@ export type Correction = {
   createdAt: string;
   answers: CorrectionAnswer[];
 };
+import type { QuestionType } from "./questions";

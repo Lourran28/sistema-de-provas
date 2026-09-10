@@ -30,6 +30,7 @@ import br.com.provas.entities.ExamVersionAlternativeEntity;
 import br.com.provas.entities.ExamVersionEntity;
 import br.com.provas.entities.ExamVersionQuestionEntity;
 import br.com.provas.entities.QuestionEntity;
+import br.com.provas.entities.QuestionType;
 import br.com.provas.exceptions.NotFoundException;
 import br.com.provas.repositories.AlternativeRepository;
 import br.com.provas.repositories.AnswerKeyItemRepository;
@@ -196,10 +197,14 @@ public class ExamVersionService {
                         version.getId(),
                         examQuestion.getId(),
                         question.getId(),
-                        questionIndex + 1);
+                        questionIndex + 1,
+                        question.getQuestionType());
                 versionQuestions.add(versionQuestion);
 
                 List<AlternativeEntity> shuffledAlternatives = new ArrayList<>(alternativesByQuestionId.get(question.getId()));
+                if (question.getQuestionType() == QuestionType.DISCURSIVE) {
+                    continue;
+                }
                 Collections.shuffle(shuffledAlternatives, random);
                 AlternativeEntity correctAlternative = null;
                 int correctPosition = 0;
@@ -283,6 +288,13 @@ public class ExamVersionService {
         for (ExamQuestionEntity examQuestion : examQuestions) {
             QuestionEntity question = questionsById.get(examQuestion.getQuestionId());
             List<AlternativeEntity> alternatives = alternativeRepository.findAllByQuestionIdOrderByPositionAsc(question.getId());
+            if (question.getQuestionType() == QuestionType.DISCURSIVE) {
+                if (!alternatives.isEmpty()) {
+                    throw new IllegalStateException("Questões abertas não podem possuir alternativas persistidas.");
+                }
+                alternativesByQuestion.put(question.getId(), List.of());
+                continue;
+            }
             long correctCount = alternatives.stream().filter(AlternativeEntity::isCorrect).count();
             if (alternatives.size() < 2 || correctCount != 1) {
                 throw new IllegalStateException("Cada questão da prova precisa ter alternativas válidas e uma única resposta correta.");
@@ -407,6 +419,7 @@ public class ExamVersionService {
                 examQuestion.getPoints(),
                 question.getStatement(),
                 question.getImageUrl(),
+                versionQuestion.getQuestionType(),
                 alternatives);
     }
 

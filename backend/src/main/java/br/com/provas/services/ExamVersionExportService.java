@@ -47,6 +47,7 @@ import br.com.provas.dtos.exams.ExamResponse;
 import br.com.provas.dtos.versions.ExamVersionAlternativeResponse;
 import br.com.provas.dtos.versions.ExamVersionQuestionResponse;
 import br.com.provas.dtos.versions.ExamVersionResponse;
+import br.com.provas.entities.QuestionType;
 import br.com.provas.security.UserPrincipal;
 
 @Service
@@ -116,6 +117,11 @@ public class ExamVersionExportService {
                             360,
                             40);
                 }
+                if (question.questionType() == QuestionType.DISCURSIVE) {
+                    for (int line = 0; line < 5; line++) {
+                        addDocxParagraph(document, "________________________________________________________________________________", 10, false, 0, 80);
+                    }
+                }
                 addDocxParagraph(document, "", 10, false, 0, 100);
             }
 
@@ -149,6 +155,11 @@ public class ExamVersionExportService {
                 loadImage(question.imageUrl()).ifPresent(writer::image);
                 for (ExamVersionAlternativeResponse alternative : question.alternatives()) {
                     writer.paragraph("%s) %s".formatted(letterFor(alternative.position()), alternative.text()), false, 9, 13, 16, 2);
+                }
+                if (question.questionType() == QuestionType.DISCURSIVE) {
+                    for (int line = 0; line < 5; line++) {
+                        writer.paragraph("________________________________________________________________________________", false, 8, 13, 0, 1);
+                    }
                 }
                 writer.space(8);
             }

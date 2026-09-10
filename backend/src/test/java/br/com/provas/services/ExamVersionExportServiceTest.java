@@ -29,6 +29,7 @@ import br.com.provas.dtos.versions.ExamVersionQuestionResponse;
 import br.com.provas.dtos.versions.ExamVersionResponse;
 import br.com.provas.entities.ExamKind;
 import br.com.provas.entities.ExamVersionStatus;
+import br.com.provas.entities.QuestionType;
 import br.com.provas.entities.SubjectEntity;
 import br.com.provas.security.UserPrincipal;
 import br.com.provas.entities.UserRole;
@@ -69,6 +70,7 @@ class ExamVersionExportServiceTest {
                 BigDecimal.ONE,
                 "Observe a imagem de apoio e assinale a alternativa correta.",
                 ONE_PIXEL_PNG,
+                QuestionType.MULTIPLE_CHOICE,
                 List.of(
                         new ExamVersionAlternativeResponse(UUID.randomUUID(), "Alternativa correta", 1),
                         new ExamVersionAlternativeResponse(UUID.randomUUID(), "Alternativa incorreta", 2)));

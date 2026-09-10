@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,11 +24,14 @@ import br.com.provas.dtos.corrections.CorrectionResponse;
 import br.com.provas.entities.AlternativeEntity;
 import br.com.provas.entities.AnswerKeyEntity;
 import br.com.provas.entities.AnswerKeyItemEntity;
+import br.com.provas.entities.CorrectionEntity;
 import br.com.provas.entities.ExamEntity;
 import br.com.provas.entities.ExamQuestionEntity;
 import br.com.provas.entities.ExamVersionAlternativeEntity;
 import br.com.provas.entities.ExamVersionEntity;
 import br.com.provas.entities.ExamVersionQuestionEntity;
+import br.com.provas.entities.QuestionType;
+import br.com.provas.entities.StudentAnswerEntity;
 import br.com.provas.entities.StudentAnswerStatus;
 import br.com.provas.repositories.AlternativeRepository;
 import br.com.provas.repositories.AnswerKeyItemRepository;
@@ -142,6 +146,82 @@ class CorrectionServiceTest {
         assertThrows(IllegalArgumentException.class, () -> correctionService.create(fixture.teacherId(), request));
     }
 
+    @Test
+    void addsTheManualScoreOfADiscursiveQuestion() {
+        DiscursiveFixture fixture = configureDiscursiveFixture();
+
+        CorrectionResponse response = correctionService.create(fixture.teacherId(), new CorrectionRequest(
+                fixture.version().getId(),
+                null,
+                "Ana Souza",
+                null,
+                "2º Ano",
+                List.of(new CorrectionAnswerRequest(
+                        fixture.versionQuestion().getId(),
+                        null,
+                        StudentAnswerStatus.NEEDS_REVIEW,
+                        new BigDecimal("3.50")))));
+
+        assertEquals(new BigDecimal("3.50"), response.score());
+        assertEquals(QuestionType.DISCURSIVE, response.answers().getFirst().questionType());
+        assertEquals(new BigDecimal("3.50"), response.answers().getFirst().awardedPoints());
+        assertEquals(new BigDecimal("5.00"), response.answers().getFirst().maxPoints());
+    }
+
+    @Test
+    void blocksConfirmationWhileADiscursiveQuestionHasNoScore() {
+        DiscursiveFixture fixture = configureDiscursiveFixture();
+        AtomicReference<CorrectionEntity> savedCorrection = new AtomicReference<>();
+        AtomicReference<List<StudentAnswerEntity>> savedAnswers = new AtomicReference<>(List.of());
+        when(correctionRepository.save(any(CorrectionEntity.class))).thenAnswer(invocation -> {
+            CorrectionEntity correction = invocation.getArgument(0);
+            savedCorrection.set(correction);
+            return correction;
+        });
+        when(studentAnswerRepository.saveAll(any())).thenAnswer(invocation -> {
+            List<StudentAnswerEntity> answers = invocation.getArgument(0);
+            savedAnswers.set(answers);
+            return answers;
+        });
+
+        CorrectionResponse draft = correctionService.create(fixture.teacherId(), new CorrectionRequest(
+                fixture.version().getId(), null, "Ana Souza", null, "2º Ano",
+                List.of(new CorrectionAnswerRequest(
+                        fixture.versionQuestion().getId(), null, StudentAnswerStatus.NEEDS_REVIEW, null))));
+        when(correctionRepository.findByIdAndTeacherId(draft.id(), fixture.teacherId()))
+                .thenReturn(Optional.of(savedCorrection.get()));
+        when(studentAnswerRepository.findAllByCorrectionId(draft.id())).thenReturn(savedAnswers.get());
+
+        assertThrows(IllegalStateException.class, () -> correctionService.confirm(fixture.teacherId(), draft.id()));
+    }
+
+    private DiscursiveFixture configureDiscursiveFixture() {
+        UUID teacherId = UUID.randomUUID();
+        ExamEntity exam = new ExamEntity(
+                teacherId, null, "Avaliação aberta", "2º Ano", null, null, null, null,
+                new BigDecimal("5.00"), 1);
+        ExamVersionEntity version = new ExamVersionEntity(exam.getId(), "A");
+        ExamQuestionEntity examQuestion = new ExamQuestionEntity(
+                exam.getId(), UUID.randomUUID(), 1, new BigDecimal("5.00"));
+        ExamVersionQuestionEntity versionQuestion = new ExamVersionQuestionEntity(
+                version.getId(), examQuestion.getId(), examQuestion.getQuestionId(), 1, QuestionType.DISCURSIVE);
+        AnswerKeyEntity answerKey = new AnswerKeyEntity(version.getId());
+
+        when(examVersionRepository.findById(version.getId())).thenReturn(Optional.of(version));
+        when(examRepository.findByIdAndTeacherId(exam.getId(), teacherId)).thenReturn(Optional.of(exam));
+        when(examVersionQuestionRepository.findAllByExamVersionIdOrderByPositionAsc(version.getId()))
+                .thenReturn(List.of(versionQuestion));
+        when(examVersionAlternativeRepository.findAllByExamVersionQuestionIdInOrderByExamVersionQuestionIdAscPositionAsc(any()))
+                .thenReturn(List.of());
+        when(alternativeRepository.findAllById(any())).thenReturn(List.of());
+        when(answerKeyRepository.findByExamVersionId(version.getId())).thenReturn(Optional.of(answerKey));
+        when(answerKeyItemRepository.findAllByAnswerKeyIdOrderByQuestionPositionAsc(answerKey.getId()))
+                .thenReturn(List.of());
+        when(examQuestionRepository.findAllByExamIdOrderByPositionAsc(exam.getId()))
+                .thenReturn(List.of(examQuestion));
+        return new DiscursiveFixture(teacherId, version, versionQuestion);
+    }
+
     private Fixture configureFixture() {
         UUID teacherId = UUID.randomUUID();
         ExamEntity exam = new ExamEntity(
@@ -208,5 +288,11 @@ class CorrectionServiceTest {
             ExamVersionQuestionEntity secondVersionQuestion,
             AlternativeEntity firstCorrectAlternative,
             AlternativeEntity secondCorrectAlternative) {
+    }
+
+    private record DiscursiveFixture(
+            UUID teacherId,
+            ExamVersionEntity version,
+            ExamVersionQuestionEntity versionQuestion) {
     }
 }

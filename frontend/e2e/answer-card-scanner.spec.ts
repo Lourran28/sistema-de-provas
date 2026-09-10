@@ -16,6 +16,7 @@ const version = {
     points: 1,
     statement: `Questão ${questionIndex + 1}`,
     imageUrl: null,
+    questionType: "MULTIPLE_CHOICE",
     alternatives: Array.from({ length: 4 }, (_, alternativeIndex) => ({
       alternativeId: `alternative-${questionIndex + 1}-${alternativeIndex + 1}`,
       text: `Alternativa ${alternativeIndex + 1}`,

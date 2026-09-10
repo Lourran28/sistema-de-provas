@@ -32,7 +32,7 @@ export type QuestionInput = {
   questionType: QuestionType;
   difficulty: QuestionDifficulty;
   alternatives: Array<{ text: string }>;
-  correctAlternativeIndex: number;
+  correctAlternativeIndex: number | null;
 };
 
 export type QuestionFilters = {

@@ -101,6 +101,7 @@ export type ExamVersionQuestion = {
   points: number;
   statement: string;
   imageUrl: string | null;
+  questionType: QuestionType;
   alternatives: ExamVersionAlternative[];
 };
 
@@ -173,3 +174,4 @@ export const examKindLabels: Record<ExamKind, string> = {
   PROVA: "Prova",
   SIMULADO: "Simulado"
 };
+import type { QuestionType } from "./questions";

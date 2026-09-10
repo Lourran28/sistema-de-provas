@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import br.com.provas.dtos.questions.QuestionPageResponse;
 import br.com.provas.dtos.questions.QuestionClearResponse;
+import br.com.provas.dtos.questions.AlternativeRequest;
 import br.com.provas.dtos.questions.QuestionRequest;
 import br.com.provas.dtos.questions.QuestionResponse;
 import br.com.provas.entities.AlternativeEntity;
@@ -262,9 +263,7 @@ public class QuestionService {
     }
 
     private ResolvedQuestionData resolveRequest(UUID teacherId, QuestionRequest request) {
-        if (request.correctAlternativeIndex() >= request.alternatives().size()) {
-            throw new IllegalArgumentException("Selecione uma alternativa correta válida.");
-        }
+        validateAnswerStructure(request);
 
         UUID subjectId = null;
         if (request.subjectId() != null) {
@@ -292,18 +291,40 @@ public class QuestionService {
         questionContentRepository.deleteByIdQuestionId(questionId);
         questionContentRepository.flush();
 
+        List<AlternativeRequest> requestedAlternatives = request.alternatives() == null ? List.of() : request.alternatives();
         List<AlternativeEntity> alternatives = new ArrayList<>();
-        for (int index = 0; index < request.alternatives().size(); index++) {
+        for (int index = 0; index < requestedAlternatives.size(); index++) {
             alternatives.add(new AlternativeEntity(
                     questionId,
-                    normalizeRequired(request.alternatives().get(index).text()),
+                    normalizeRequired(requestedAlternatives.get(index).text()),
                     index + 1,
                     index == request.correctAlternativeIndex()));
         }
-        alternativeRepository.saveAll(alternatives);
+        if (!alternatives.isEmpty()) {
+            alternativeRepository.saveAll(alternatives);
+        }
 
         if (contentId != null) {
             questionContentRepository.save(new QuestionContentEntity(questionId, contentId, QuestionContentOriginType.PRIMARY));
+        }
+    }
+
+    private void validateAnswerStructure(QuestionRequest request) {
+        List<AlternativeRequest> alternatives = request.alternatives() == null ? List.of() : request.alternatives();
+        if (request.questionType() == QuestionType.DISCURSIVE) {
+            if (!alternatives.isEmpty() || request.correctAlternativeIndex() != null) {
+                throw new IllegalArgumentException("Questões abertas não devem possuir alternativas ou gabarito objetivo.");
+            }
+            return;
+        }
+
+        if (alternatives.size() < 2 || alternatives.size() > 8) {
+            throw new IllegalArgumentException("A questão deve possuir entre 2 e 8 alternativas.");
+        }
+        if (request.correctAlternativeIndex() == null
+                || request.correctAlternativeIndex() < 0
+                || request.correctAlternativeIndex() >= alternatives.size()) {
+            throw new IllegalArgumentException("Selecione uma alternativa correta válida.");
         }
     }
 

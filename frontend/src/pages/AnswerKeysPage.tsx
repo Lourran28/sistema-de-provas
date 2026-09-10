@@ -78,11 +78,12 @@ export function AnswerKeysPage() {
                 </div>
               </div>
               <ol className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
-                {version.answerKey.map((item) => (
-                  <li className="border border-stone-200 px-2 py-2 text-center text-sm text-slate-700" key={item.questionPosition}>
-                    <span className="text-slate-500">{item.questionPosition}</span> <strong className="text-slate-950">{item.correctLetter}</strong>
-                  </li>
-                ))}
+                {version.questions.map((question) => {
+                  const item = version.answerKey.find((answer) => answer.questionPosition === question.position);
+                  return <li className="border border-stone-200 px-2 py-2 text-center text-sm text-slate-700" key={question.id}>
+                    <span className="text-slate-500">{question.position}</span> <strong className="text-slate-950">{question.questionType === "DISCURSIVE" ? "Manual" : item?.correctLetter ?? "-"}</strong>
+                  </li>;
+                })}
               </ol>
             </article>
           ))}

@@ -163,11 +163,12 @@ export function ExamVersionsPanel({ exam, onVersionsGenerated }: ExamVersionsPan
                 <h4 className="text-sm font-semibold text-slate-900">Gabarito</h4>
               </div>
               <ol className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
-                {selectedVersion.answerKey.map((item) => (
-                  <li className="border border-stone-200 px-2 py-2 text-center text-sm text-slate-700" key={item.questionPosition}>
-                    <span className="text-slate-500">{item.questionPosition}</span> <strong className="text-slate-950">{item.correctLetter}</strong>
-                  </li>
-                ))}
+                {selectedVersion.questions.map((question) => {
+                  const item = answerKeyByPosition.get(question.position);
+                  return <li className="border border-stone-200 px-2 py-2 text-center text-sm text-slate-700" key={question.id}>
+                    <span className="text-slate-500">{question.position}</span> <strong className="text-slate-950">{question.questionType === "DISCURSIVE" ? "Manual" : item?.correctLetter ?? "-"}</strong>
+                  </li>;
+                })}
               </ol>
             </section>
 
@@ -178,6 +179,7 @@ export function ExamVersionsPanel({ exam, onVersionsGenerated }: ExamVersionsPan
                   <li className="border-b border-stone-100 pb-5 last:border-b-0 last:pb-0" key={question.id}>
                     <p className="text-xs font-semibold uppercase text-slate-500">Questão {question.position} · {formatScore(question.points)}</p>
                     <h4 className="mt-2 text-sm font-semibold leading-6 text-slate-950">{question.statement}</h4>
+                    {question.questionType === "DISCURSIVE" ? <p className="mt-3 text-sm font-medium text-teal-800">Questão aberta · correção manual</p> : null}
                     <ol className="mt-3 space-y-2 text-sm text-slate-700" type="A">
                       {question.alternatives.map((alternative, alternativeIndex) => (
                         <li className="flex items-start gap-2 pl-1" key={alternative.alternativeId}>

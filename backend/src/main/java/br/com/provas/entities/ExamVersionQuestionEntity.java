@@ -5,6 +5,8 @@ import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
@@ -28,6 +30,10 @@ public class ExamVersionQuestionEntity {
     @Column(nullable = false)
     private int position;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "question_type", nullable = false, length = 40)
+    private QuestionType questionType;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -35,11 +41,21 @@ public class ExamVersionQuestionEntity {
     }
 
     public ExamVersionQuestionEntity(UUID examVersionId, UUID examQuestionId, UUID originalQuestionId, int position) {
+        this(examVersionId, examQuestionId, originalQuestionId, position, QuestionType.MULTIPLE_CHOICE);
+    }
+
+    public ExamVersionQuestionEntity(
+            UUID examVersionId,
+            UUID examQuestionId,
+            UUID originalQuestionId,
+            int position,
+            QuestionType questionType) {
         this.id = UUID.randomUUID();
         this.examVersionId = examVersionId;
         this.examQuestionId = examQuestionId;
         this.originalQuestionId = originalQuestionId;
         this.position = position;
+        this.questionType = questionType;
     }
 
     @PrePersist
@@ -70,5 +86,9 @@ public class ExamVersionQuestionEntity {
 
     public int getPosition() {
         return position;
+    }
+
+    public QuestionType getQuestionType() {
+        return questionType;
     }
 }

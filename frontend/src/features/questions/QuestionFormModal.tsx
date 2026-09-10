@@ -1,11 +1,11 @@
-import { CircleCheck, ImagePlus, Plus, Save, Trash2, X } from "lucide-react";
+import { AlignLeft, CircleCheck, ImagePlus, ListChecks, Plus, Save, Trash2, X } from "lucide-react";
 import { type ChangeEvent, type FormEvent, useState } from "react";
 
 import { Button } from "../../components/ui/Button";
 import { ModalDialog } from "../../components/ui/ModalDialog";
 import { ApiRequestError } from "../../services/httpClient";
 import type { Subject } from "../../types/contents";
-import { difficultyLabels, type Question, type QuestionDifficulty, type QuestionInput } from "../../types/questions";
+import { difficultyLabels, type Question, type QuestionDifficulty, type QuestionInput, type QuestionType } from "../../types/questions";
 
 type QuestionFormModalProps = {
   onClose: () => void;
@@ -23,6 +23,7 @@ export function QuestionFormModal({ onClose, onCreateSubject, onSave, question, 
   const [subjectName, setSubjectName] = useState(() => subjects.find((subject) => subject.id === question?.subjectId)?.name ?? "");
   const [statement, setStatement] = useState(question?.statement ?? "");
   const [imageUrl, setImageUrl] = useState(question?.imageUrl ?? "");
+  const [questionType, setQuestionType] = useState<QuestionType>(question?.questionType === "DISCURSIVE" ? "DISCURSIVE" : "MULTIPLE_CHOICE");
   const [difficulty, setDifficulty] = useState<QuestionDifficulty>(question?.difficulty ?? "MEDIUM");
   const [alternatives, setAlternatives] = useState(() =>
     question ? question.alternatives.map((alternative) => ({ text: alternative.text })) : emptyAlternatives
@@ -61,6 +62,14 @@ export function QuestionFormModal({ onClose, onCreateSubject, onSave, question, 
     });
   }
 
+  function selectQuestionType(nextType: QuestionType) {
+    setQuestionType(nextType);
+    if (nextType === "MULTIPLE_CHOICE" && alternatives.length < 2) {
+      setAlternatives(emptyAlternatives.map((alternative) => ({ ...alternative })));
+      setCorrectAlternativeIndex(0);
+    }
+  }
+
   async function selectImage(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -93,10 +102,10 @@ export function QuestionFormModal({ onClose, onCreateSubject, onSave, question, 
         contentId: question?.contentIds[0],
         statement,
         imageUrl: imageUrl.trim() || undefined,
-        questionType: "MULTIPLE_CHOICE",
+        questionType,
         difficulty,
-        alternatives,
-        correctAlternativeIndex
+        alternatives: questionType === "DISCURSIVE" ? [] : alternatives,
+        correctAlternativeIndex: questionType === "DISCURSIVE" ? null : correctAlternativeIndex
       });
       onClose();
     } catch (requestError) {
@@ -136,6 +145,22 @@ export function QuestionFormModal({ onClose, onCreateSubject, onSave, question, 
               <span className="mt-1 block text-xs font-normal text-slate-500">Uma disciplina nova será criada ao salvar.</span>
             </label>
           </div>
+
+          <fieldset>
+            <legend className="text-sm font-semibold text-slate-900">Tipo de questão</legend>
+            <div className="mt-2 grid max-w-xl gap-2 sm:grid-cols-2">
+              <label className={`flex min-h-16 cursor-pointer items-center gap-3 border px-4 py-3 transition ${questionType === "MULTIPLE_CHOICE" ? "border-teal-700 bg-teal-50" : "border-stone-300 bg-white hover:border-slate-400"}`}>
+                <input checked={questionType === "MULTIPLE_CHOICE"} className="sr-only" name="question-type" onChange={() => selectQuestionType("MULTIPLE_CHOICE")} type="radio" />
+                <ListChecks aria-hidden="true" className="pointer-events-none shrink-0 text-teal-800" size={20} />
+                <span><strong className="block text-sm text-slate-950">Múltipla escolha</strong><span className="text-xs text-slate-500">Alternativas com gabarito</span></span>
+              </label>
+              <label className={`flex min-h-16 cursor-pointer items-center gap-3 border px-4 py-3 transition ${questionType === "DISCURSIVE" ? "border-teal-700 bg-teal-50" : "border-stone-300 bg-white hover:border-slate-400"}`}>
+                <input checked={questionType === "DISCURSIVE"} className="sr-only" name="question-type" onChange={() => selectQuestionType("DISCURSIVE")} type="radio" />
+                <AlignLeft aria-hidden="true" className="pointer-events-none shrink-0 text-teal-800" size={20} />
+                <span><strong className="block text-sm text-slate-950">Questão aberta</strong><span className="text-xs text-slate-500">Resposta escrita</span></span>
+              </label>
+            </div>
+          </fieldset>
 
           <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_220px]">
             <label className="block text-sm font-medium text-slate-700" htmlFor="question-statement">
@@ -219,7 +244,7 @@ export function QuestionFormModal({ onClose, onCreateSubject, onSave, question, 
             ) : null}
           </div>
 
-          <fieldset>
+          {questionType === "MULTIPLE_CHOICE" ? <fieldset>
             <div className="flex items-center justify-between gap-4">
               <div>
                 <legend className="text-sm font-semibold text-slate-900">Alternativas</legend>
@@ -278,7 +303,14 @@ export function QuestionFormModal({ onClose, onCreateSubject, onSave, question, 
                 </div>
               ))}
             </div>
-          </fieldset>
+          </fieldset> : (
+            <div className="border-y border-stone-200 py-4">
+              <div className="flex items-center gap-3 text-sm text-slate-700">
+                <AlignLeft aria-hidden="true" className="text-teal-800" size={19} />
+                <span>A nota será informada pelo professor durante a correção.</span>
+              </div>
+            </div>
+          )}
         </div>
 
         <footer className="flex flex-wrap justify-end gap-3 px-5 py-4 sm:px-6">

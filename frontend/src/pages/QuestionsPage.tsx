@@ -359,7 +359,7 @@ function QuestionTable({ contentNames, isLoading, onEdit, onRemove, questions, s
                   <div className="flex items-start gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="line-clamp-2 font-semibold text-slate-900"><MathText text={question.statement} /></div>
-                      <p className="mt-1 text-xs text-slate-500">{question.alternatives.length} alternativas</p>
+                      <p className="mt-1 text-xs text-slate-500">{questionTypeLabel(question)}</p>
                     </div>
                     {question.imageUrl ? <img alt="Imagem de apoio da questão" className="h-12 w-16 shrink-0 border border-stone-200 bg-stone-50 object-cover" loading="lazy" referrerPolicy="no-referrer" src={question.imageUrl} /> : null}
                   </div>
@@ -391,7 +391,7 @@ function QuestionTable({ contentNames, isLoading, onEdit, onRemove, questions, s
             </div>
             <div className="flex flex-wrap gap-2 text-xs text-slate-600">
               <span className="rounded-md bg-stone-100 px-2 py-1">{question.subjectId ? subjectNames.get(question.subjectId) ?? "Disciplina removida" : "Sem disciplina"}</span>
-              <span className="rounded-md bg-teal-50 px-2 py-1 text-teal-800">{question.alternatives.length} alternativas</span>
+              <span className="rounded-md bg-teal-50 px-2 py-1 text-teal-800">{questionTypeLabel(question)}</span>
             </div>
           </article>
         ))}
@@ -422,4 +422,8 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 function questionLabel(count: number) {
   return count === 1 ? "questão" : "questões";
+}
+
+function questionTypeLabel(question: Question) {
+  return question.questionType === "DISCURSIVE" ? "Questão aberta" : `${question.alternatives.length} alternativas`;
 }

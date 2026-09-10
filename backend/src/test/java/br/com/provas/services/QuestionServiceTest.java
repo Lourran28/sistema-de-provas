@@ -88,6 +88,35 @@ class QuestionServiceTest {
     }
 
     @Test
+    void createsDiscursiveQuestionWithoutAlternatives() {
+        UUID teacherId = UUID.randomUUID();
+        AtomicReference<QuestionEntity> savedQuestion = new AtomicReference<>();
+        when(questionRepository.save(any(QuestionEntity.class))).thenAnswer(invocation -> {
+            QuestionEntity question = invocation.getArgument(0);
+            savedQuestion.set(question);
+            return question;
+        });
+        when(questionRepository.findByIdAndTeacherId(any(UUID.class), any(UUID.class)))
+                .thenAnswer(invocation -> Optional.ofNullable(savedQuestion.get()));
+        when(alternativeRepository.findAllByQuestionIdOrderByPositionAsc(any(UUID.class))).thenReturn(List.of());
+        when(questionContentRepository.findAllByIdQuestionIdIn(any())).thenReturn(List.of());
+
+        QuestionResponse response = questionService.create(teacherId, new QuestionRequest(
+                null,
+                null,
+                "Explique como chegou ao resultado.",
+                null,
+                QuestionType.DISCURSIVE,
+                QuestionDifficulty.MEDIUM,
+                List.of(),
+                null));
+
+        assertEquals(QuestionType.DISCURSIVE, response.questionType());
+        assertEquals(List.of(), response.alternatives());
+        verify(alternativeRepository, never()).saveAll(any());
+    }
+
+    @Test
     void clearsUnusedQuestionsAndArchivesQuestionsAlreadyInAnExam() {
         UUID teacherId = UUID.randomUUID();
         QuestionEntity unusedQuestion = question(teacherId);

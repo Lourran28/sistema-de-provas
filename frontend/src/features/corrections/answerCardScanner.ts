@@ -83,14 +83,21 @@ export async function scanAnswerCard(file: File, version: ExamVersion): Promise<
   }
 
   const imageData = context.getImageData(0, 0, width, height);
-  const alternativeCount = Math.max(2, ...version.questions.map((question) => question.alternatives.length));
+  const objectiveQuestions = version.questions.filter((question) => question.questionType !== "DISCURSIVE");
+  if (objectiveQuestions.length === 0) {
+    throw new Error("Esta prova possui apenas questões abertas e não usa cartão-resposta.");
+  }
+  const alternativeCount = Math.max(2, ...objectiveQuestions.map((question) => question.alternatives.length));
   const tableHeightMm = (version.questions.length + 1) * ROW_HEIGHT_MM;
   const geometry = findCardGeometry(imageData, version, alternativeCount, tableHeightMm);
   if (!geometry) {
     throw new Error("Não encontrei a grade do cartão. Fotografe a folha inteira, com boa luz e sem cobrir a tabela.");
   }
 
-  const answers = version.questions.map((question, questionIndex) => {
+  const answers = version.questions.flatMap((question, questionIndex) => {
+    if (question.questionType === "DISCURSIVE") {
+      return [];
+    }
     const options = question.alternatives.map((alternative, alternativeIndex) => {
       const u = alternativePosition(alternativeIndex, alternativeCount);
       const v = questionPosition(questionIndex, version.questions.length);
@@ -119,14 +126,14 @@ export async function scanAnswerCard(file: File, version: ExamVersion): Promise<
       selectedAlternativeId = strongest.alternativeId;
     }
 
-    return {
+    return [{
       questionId: question.id,
       selectedAlternativeId,
       status,
       confidence,
       center: strongest.center,
       radius: strongest.radius
-    };
+    }];
   });
 
   drawScanOverlay(context, geometry.frame, answers);

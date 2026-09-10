@@ -14,7 +14,7 @@ test("correction requires the class and keeps the student name optional", async 
   await authenticate(page);
   await page.route("**/api/exam-versions", (route) => route.fulfill({ json: [{
     id: "version-1", examId: "exam-1", examTitle: "Prova de Português", label: "A", status: "GENERATED", generatedAt: now,
-    questions: [{ id: "vq-1", originalQuestionId: "q-1", position: 1, points: 10, statement: "Questão", imageUrl: null, alternatives: [{ alternativeId: "a-1", text: "Resposta", position: 1 }] }],
+    questions: [{ id: "vq-1", originalQuestionId: "q-1", position: 1, points: 10, statement: "Questão", imageUrl: null, questionType: "MULTIPLE_CHOICE", alternatives: [{ alternativeId: "a-1", text: "Resposta", position: 1 }] }],
     answerKey: [{ questionPosition: 1, correctAlternativeId: "a-1", correctLetter: "A" }]
   }] }));
   await page.goto("/correcao");
@@ -85,6 +85,73 @@ test("question editing confirms the saved action", async ({ page }) => {
   await page.getByRole("button", { name: "Salvar alterações" }).click();
   await expect(page.getByRole("status")).toContainText("Questão atualizada com sucesso");
   expect(statement).toBe("Questão atualizada");
+});
+
+test("creates an open question without alternatives", async ({ page }, testInfo) => {
+  await authenticate(page);
+  let submitted: Record<string, unknown> | null = null;
+  await page.route("**/api/subjects", (route) => route.fulfill({ json: [subject] }));
+  await page.route(/\/api\/contents(?:\?.*)?$/, (route) => route.fulfill({ json: { items: [], page: { number: 0, size: 100, totalElements: 0, totalPages: 0 } } }));
+  await page.route(/\/api\/questions(?:\?.*)?$/, async (route) => {
+    if (route.request().method() === "POST") {
+      submitted = route.request().postDataJSON();
+      await route.fulfill({ json: { id: "open-1", subjectId: null, contentIds: [], statement: "Explique sua resposta.", imageUrl: null, questionType: "DISCURSIVE", difficulty: "MEDIUM", sourceType: "MANUAL", status: "ACTIVE", alternatives: [], createdAt: now, updatedAt: now } });
+      return;
+    }
+    await route.fulfill({ json: { items: [], page: { number: 0, size: 12, totalElements: 0, totalPages: 0 } } });
+  });
+
+  await page.goto("/questoes");
+  await page.getByRole("button", { name: "Nova questão" }).click();
+  await page.getByText("Questão aberta", { exact: true }).click();
+  await page.getByLabel("Enunciado").fill("Explique sua resposta.");
+  await expect(page.getByText("Alternativas", { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("open-question-form.png"), fullPage: true });
+  await page.getByRole("button", { name: "Salvar questão" }).click();
+
+  expect(submitted).toMatchObject({
+    questionType: "DISCURSIVE",
+    alternatives: [],
+    correctAlternativeIndex: null,
+  });
+});
+
+test("adds the manual grade of an open question to a mixed correction", async ({ page }, testInfo) => {
+  await authenticate(page);
+  let submitted: Record<string, unknown> | null = null;
+  const mixedVersion = {
+    id: "mixed-version", examId: "mixed-exam", examTitle: "Avaliação mista", label: "A", status: "GENERATED", generatedAt: now,
+    questions: [
+      { id: "objective-vq", originalQuestionId: "objective-q", position: 1, points: 5, statement: "Marque a correta.", imageUrl: null, questionType: "MULTIPLE_CHOICE", alternatives: [{ alternativeId: "objective-a", text: "Certa", position: 1 }, { alternativeId: "objective-b", text: "Errada", position: 2 }] },
+      { id: "open-vq", originalQuestionId: "open-q", position: 2, points: 5, statement: "Explique sua resposta.", imageUrl: null, questionType: "DISCURSIVE", alternatives: [] },
+    ],
+    answerKey: [{ questionPosition: 1, correctAlternativeId: "objective-a", correctLetter: "A" }],
+  };
+  await page.route("**/api/exam-versions", (route) => route.fulfill({ json: [mixedVersion] }));
+  await page.route("**/api/corrections", async (route) => {
+    submitted = route.request().postDataJSON();
+    await route.fulfill({ json: {
+      id: "correction-1", examVersionId: mixedVersion.id, examTitle: mixedVersion.examTitle, versionLabel: "A", studentId: null, studentName: "Registro da turma", studentIdentifier: null, classGroup: "8º A", status: "NEEDS_REVIEW", score: 9, totalScore: 10, correctCount: 1, wrongCount: 0, blankCount: 0, ambiguousCount: 0, reviewedAt: null, createdAt: now,
+      answers: [
+        { examVersionQuestionId: "objective-vq", questionPosition: 1, selectedAlternativeId: "objective-a", selectedLetter: "A", correctLetter: "A", questionType: "MULTIPLE_CHOICE", awardedPoints: null, maxPoints: 5, status: "DETECTED", correct: true, cancelled: false },
+        { examVersionQuestionId: "open-vq", questionPosition: 2, selectedAlternativeId: null, selectedLetter: null, correctLetter: null, questionType: "DISCURSIVE", awardedPoints: 4, maxPoints: 5, status: "NEEDS_REVIEW", correct: null, cancelled: false },
+      ],
+    } });
+  });
+
+  await page.goto("/correcao");
+  await page.getByLabel("Versão oficial").selectOption(mixedVersion.id);
+  await page.locator("#correction-class").fill("8º A");
+  await page.getByRole("group", { name: "Resposta da questão 1" }).getByRole("button", { name: "A", exact: true }).click();
+  await page.getByLabel(/Nota \(máx\. 5\)/).fill("4");
+  await page.screenshot({ path: testInfo.outputPath("open-question-grade.png"), fullPage: true });
+  await page.getByRole("button", { name: "Calcular e revisar" }).click();
+
+  expect(submitted).toMatchObject({ answers: [
+    { examVersionQuestionId: "objective-vq", selectedAlternativeId: "objective-a", awardedPoints: null },
+    { examVersionQuestionId: "open-vq", selectedAlternativeId: null, awardedPoints: 4 },
+  ] });
+  await expect(page.getByText("4 / 5")).toBeVisible();
 });
 
 function createTextPdf(text: string) {

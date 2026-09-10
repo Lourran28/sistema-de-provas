@@ -208,6 +208,57 @@ class ExamVersionServiceTest {
     }
 
     @Test
+    void generatesMixedVersionsWithoutAnswerKeyForDiscursiveQuestions() {
+        configurePersistence();
+        UUID teacherId = UUID.randomUUID();
+        ExamEntity exam = new ExamEntity(
+                teacherId, null, "Avaliação mista", null, null, null, null, null,
+                new BigDecimal("10.00"), 2);
+        exam.approve();
+        QuestionEntity objective = new QuestionEntity(
+                teacherId, null, "Questão objetiva", QuestionType.MULTIPLE_CHOICE, QuestionDifficulty.MEDIUM);
+        QuestionEntity discursive = new QuestionEntity(
+                teacherId, null, "Questão aberta", QuestionType.DISCURSIVE, QuestionDifficulty.MEDIUM);
+        ExamQuestionEntity objectiveExamQuestion = new ExamQuestionEntity(
+                exam.getId(), objective.getId(), 1, new BigDecimal("5.00"));
+        ExamQuestionEntity discursiveExamQuestion = new ExamQuestionEntity(
+                exam.getId(), discursive.getId(), 2, new BigDecimal("5.00"));
+        AlternativeEntity correct = new AlternativeEntity(objective.getId(), "Correta", 1, true);
+        AlternativeEntity wrong = new AlternativeEntity(objective.getId(), "Errada", 2, false);
+
+        when(examRepository.findByIdAndTeacherId(exam.getId(), teacherId)).thenReturn(Optional.of(exam));
+        when(examVersionRepository.existsByExamId(exam.getId())).thenReturn(false);
+        when(examQuestionRepository.findAllByExamIdOrderByPositionAsc(exam.getId()))
+                .thenReturn(List.of(objectiveExamQuestion, discursiveExamQuestion));
+        when(questionRepository.findAllByIdInAndTeacherId(any(), eq(teacherId)))
+                .thenReturn(List.of(objective, discursive));
+        when(alternativeRepository.findAllByQuestionIdOrderByPositionAsc(objective.getId()))
+                .thenReturn(List.of(correct, wrong));
+        when(alternativeRepository.findAllByQuestionIdOrderByPositionAsc(discursive.getId()))
+                .thenReturn(List.of());
+        when(alternativeRepository.findAllById(any())).thenAnswer(invocation -> {
+            Iterable<UUID> ids = invocation.getArgument(0);
+            List<UUID> requested = new ArrayList<>();
+            ids.forEach(requested::add);
+            return List.of(correct, wrong).stream().filter(item -> requested.contains(item.getId())).toList();
+        });
+
+        List<ExamVersionResponse> versions = examVersionService.generate(teacherId, exam.getId());
+
+        assertEquals(3, versions.size());
+        assertEquals(3, savedAnswerKeyItems.size());
+        assertEquals(6, savedVersionAlternatives.size());
+        for (ExamVersionResponse version : versions) {
+            assertEquals(1, version.answerKey().size());
+            ExamVersionQuestionResponse openQuestion = version.questions().stream()
+                    .filter(question -> question.questionType() == QuestionType.DISCURSIVE)
+                    .findFirst()
+                    .orElseThrow();
+            assertTrue(openQuestion.alternatives().isEmpty());
+        }
+    }
+
+    @Test
     void blocksQuestionRemovalWhenExamHasAnApplication() {
         Fixture fixture = fixture(true);
         fixture.exam().markVersionsGenerated();

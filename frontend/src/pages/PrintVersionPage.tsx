@@ -76,6 +76,7 @@ export function PrintVersionPage() {
     () => Math.max(2, ...((version?.questions ?? []).map((question) => question.alternatives.length))),
     [version?.questions]
   );
+  const hasObjectiveQuestions = version?.questions.some((question) => question.questionType !== "DISCURSIVE") ?? false;
 
   function handlePrint(mode: PrintMode) {
     document.body.dataset.printMode = mode;
@@ -158,7 +159,7 @@ export function PrintVersionPage() {
           <Button icon={FileText} onClick={() => handlePrint("exam")} variant="secondary">
             Imprimir prova
           </Button>
-          <Button icon={ClipboardList} onClick={() => handlePrint("answer-card")} variant="secondary">
+          <Button disabled={!hasObjectiveQuestions} icon={ClipboardList} onClick={() => handlePrint("answer-card")} title={hasObjectiveQuestions ? "Imprimir cartão-resposta" : "Esta versão possui apenas questões abertas"} variant="secondary">
             Cartão-resposta
           </Button>
           <Button icon={KeyRound} onClick={() => handlePrint("answer-key")} variant="secondary">
@@ -186,11 +187,17 @@ export function PrintVersionPage() {
               <li key={question.id}>
                 <p className="print-question-statement"><MathText text={question.statement} /></p>
                 {question.imageUrl ? <img alt={`Imagem de apoio da questão ${question.position}`} className="print-question-image" referrerPolicy="no-referrer" src={question.imageUrl} /> : null}
-                <ol className="print-alternatives" type="A">
-                  {question.alternatives.map((alternative) => (
-                    <li key={alternative.alternativeId}><MathText text={alternative.text} /></li>
-                  ))}
-                </ol>
+                {question.questionType === "DISCURSIVE" ? (
+                  <div aria-label="Espaço para resposta" className="print-open-answer-lines">
+                    {Array.from({ length: 5 }, (_, index) => <span key={index} />)}
+                  </div>
+                ) : (
+                  <ol className="print-alternatives" type="A">
+                    {question.alternatives.map((alternative) => (
+                      <li key={alternative.alternativeId}><MathText text={alternative.text} /></li>
+                    ))}
+                  </ol>
+                )}
               </li>
             ))}
           </ol>
@@ -254,7 +261,7 @@ export function PrintVersionPage() {
             {version.questions.map((question) => (
               <li key={question.id}>
                 <span>{String(question.position).padStart(2, "0")}</span>
-                <strong>{answerKeyByPosition.get(question.position) ?? "-"}</strong>
+                <strong>{question.questionType === "DISCURSIVE" ? "Manual" : answerKeyByPosition.get(question.position) ?? "-"}</strong>
               </li>
             ))}
           </ol>
@@ -293,7 +300,9 @@ function AnswerCardTable({ version, alternativeCount }: { version: ExamVersion; 
           {version.questions.map((question) => (
             <tr key={question.id}>
               <th scope="row">{String(question.position).padStart(2, "0")}</th>
-              {Array.from({ length: alternativeCount }, (_, index) => (
+              {question.questionType === "DISCURSIVE" ? (
+                <td className="answer-card-open-question" colSpan={alternativeCount}>Aberta</td>
+              ) : Array.from({ length: alternativeCount }, (_, index) => (
                 <td key={index}>{index < question.alternatives.length ? <span className="answer-card-bubble" aria-hidden="true" /> : null}</td>
               ))}
             </tr>

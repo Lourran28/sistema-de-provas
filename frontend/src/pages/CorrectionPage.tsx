@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import { Button } from "../components/ui/Button";
 import { useConfirmation } from "../components/ui/confirmationContext";
+import { MathText } from "../components/ui/MathText";
 import { AnswerCardImportPanel } from "../features/corrections/AnswerCardImportPanel";
 import type { AnswerCardScanResult } from "../features/corrections/answerCardScanner";
 import { confirmCorrection, createCorrection, updateCorrection } from "../services/correctionService";
@@ -15,6 +16,7 @@ import type { ExamVersion } from "../types/exams";
 type DraftAnswer = {
   selectedAlternativeId: string | null;
   status: Exclude<StudentAnswerStatus, "CONFIRMED">;
+  awardedPoints: number | null;
 };
 
 export function CorrectionPage() {
@@ -57,10 +59,15 @@ export function CorrectionPage() {
     () => Object.values(answers).filter((answer) => answer.status === "DETECTED").length,
     [answers]
   );
+  const objectiveQuestionCount = selectedVersion?.questions.filter((question) => question.questionType !== "DISCURSIVE").length ?? 0;
 
   function selectVersion(version: ExamVersion) {
     const nextAnswers = Object.fromEntries(
-      version.questions.map((question) => [question.id, { selectedAlternativeId: null, status: "BLANK" as const }])
+      version.questions.map((question) => [question.id, {
+        selectedAlternativeId: null,
+        status: question.questionType === "DISCURSIVE" ? "NEEDS_REVIEW" as const : "BLANK" as const,
+        awardedPoints: null
+      }])
     );
     setSelectedVersion(version);
     setAnswers(nextAnswers);
@@ -69,17 +76,37 @@ export function CorrectionPage() {
   }
 
   function updateAnswer(questionId: string, selectedAlternativeId: string | null, status: DraftAnswer["status"]) {
-    setAnswers((current) => ({ ...current, [questionId]: { selectedAlternativeId, status } }));
+    setAnswers((current) => ({ ...current, [questionId]: { selectedAlternativeId, status, awardedPoints: null } }));
+    setCorrection(null);
+  }
+
+  function updateOpenScore(questionId: string, value: string) {
+    const awardedPoints = value === "" ? null : Number(value);
+    setAnswers((current) => ({
+      ...current,
+      [questionId]: { selectedAlternativeId: null, status: "NEEDS_REVIEW", awardedPoints }
+    }));
     setCorrection(null);
   }
 
   const applyCardScan = useCallback((scan: AnswerCardScanResult) => {
-    setAnswers(Object.fromEntries(scan.answers.map((answer) => [answer.questionId, {
-      selectedAlternativeId: answer.selectedAlternativeId,
-      status: answer.status
-    }])));
+    if (!selectedVersion) {
+      return;
+    }
+    const scannedByQuestionId = new Map(scan.answers.map((answer) => [answer.questionId, answer]));
+    setAnswers((current) => Object.fromEntries(selectedVersion.questions.map((question) => {
+      if (question.questionType === "DISCURSIVE") {
+        return [question.id, current[question.id] ?? { selectedAlternativeId: null, status: "NEEDS_REVIEW", awardedPoints: null }];
+      }
+      const answer = scannedByQuestionId.get(question.id);
+      return [question.id, {
+        selectedAlternativeId: answer?.selectedAlternativeId ?? null,
+        status: answer?.status ?? "NEEDS_REVIEW",
+        awardedPoints: null
+      }];
+    })));
     setCorrection(null);
-  }, []);
+  }, [selectedVersion]);
 
   function buildRequest(): CorrectionInput | null {
     if (!selectedVersion) {
@@ -97,7 +124,8 @@ export function CorrectionPage() {
       answers: selectedVersion.questions.map((question) => ({
         examVersionQuestionId: question.id,
         selectedAlternativeId: answers[question.id]?.selectedAlternativeId ?? null,
-        status: answers[question.id]?.status ?? "BLANK"
+        status: answers[question.id]?.status ?? (question.questionType === "DISCURSIVE" ? "NEEDS_REVIEW" : "BLANK"),
+        awardedPoints: answers[question.id]?.awardedPoints ?? null
       }))
     };
   }
@@ -142,7 +170,7 @@ export function CorrectionPage() {
       <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-slate-950">Correção</h1>
-          <p className="mt-1 text-sm text-slate-500">Selecione a versão, leia as bolhas preenchidas e revise a nota antes de confirmar.</p>
+          <p className="mt-1 text-sm text-slate-500">Leia as questões objetivas, atribua as notas abertas e revise o total antes de confirmar.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button icon={Files} onClick={() => navigate("/correcao-em-lote")} variant="secondary">Correção em lote</Button>
@@ -196,10 +224,10 @@ export function CorrectionPage() {
               Turma <span aria-hidden="true" className="text-rose-700">*</span>
               <input autoComplete="off" className="mt-2 h-11 w-full border border-stone-300 bg-white px-3 font-normal outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id="correction-class" maxLength={120} onChange={(event) => { setClassGroup(event.target.value); setCorrection(null); }} placeholder="Ex.: 8º A" required value={classGroup} />
             </label>
-            <p className="text-sm text-slate-500 sm:col-span-2">{answerCount} respostas marcadas de {selectedVersion.questions.length}</p>
+            <p className="text-sm text-slate-500 sm:col-span-2">{answerCount} respostas objetivas marcadas de {objectiveQuestionCount}</p>
           </section>
 
-          <AnswerCardImportPanel key={selectedVersion.id} onImported={applyCardScan} version={selectedVersion} />
+          {objectiveQuestionCount > 0 ? <AnswerCardImportPanel key={selectedVersion.id} onImported={applyCardScan} version={selectedVersion} /> : null}
 
           <section>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -211,6 +239,32 @@ export function CorrectionPage() {
             <div className="mt-5 space-y-3">
               {selectedVersion.questions.map((question) => {
                 const answer = answers[question.id];
+                if (question.questionType === "DISCURSIVE") {
+                  return (
+                    <article className="border border-stone-200 bg-white p-4 shadow-panel" key={question.id}>
+                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-end">
+                        <div>
+                          <p className="text-xs font-semibold uppercase text-slate-500">Questão {question.position} · aberta</p>
+                          <div className="mt-2 text-sm font-medium leading-6 text-slate-900"><MathText text={question.statement} /></div>
+                        </div>
+                        <label className="block text-sm font-medium text-slate-700" htmlFor={`open-score-${question.id}`}>
+                          Nota <span className="font-normal text-slate-500">(máx. {formatScore(question.points)})</span>
+                          <input
+                            className="mt-2 h-11 w-full border border-stone-300 bg-white px-3 text-slate-950 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
+                            id={`open-score-${question.id}`}
+                            max={question.points}
+                            min={0}
+                            onChange={(event) => updateOpenScore(question.id, event.target.value)}
+                            placeholder="0"
+                            step="0.01"
+                            type="number"
+                            value={answer?.awardedPoints ?? ""}
+                          />
+                        </label>
+                      </div>
+                    </article>
+                  );
+                }
                 return (
                   <article className="border border-stone-200 bg-white p-4 shadow-panel" key={question.id}>
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -274,6 +328,7 @@ export function CorrectionPage() {
 }
 
 function CorrectionSummary({ correction, isSaving, onConfirm }: { correction: Correction; isSaving: boolean; onConfirm: () => void }) {
+  const hasOpenQuestionPending = correction.answers.some((answer) => answer.questionType === "DISCURSIVE" && answer.awardedPoints === null && !answer.cancelled);
   return (
     <section className="border border-teal-200 bg-teal-50 p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -283,21 +338,23 @@ function CorrectionSummary({ correction, isSaving, onConfirm }: { correction: Co
           <p className="mt-1 text-sm text-slate-600">{correction.correctCount} acertos · {correction.wrongCount} erros · {correction.blankCount} em branco · {correction.ambiguousCount} para revisar</p>
         </div>
         {correction.status === "NEEDS_REVIEW" ? (
-          <Button disabled={isSaving} icon={CheckCircle2} onClick={onConfirm}>
+          <Button disabled={isSaving || hasOpenQuestionPending} icon={CheckCircle2} onClick={onConfirm}>
             Confirmar correção
           </Button>
         ) : (
           <span className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-800"><ClipboardCheck aria-hidden="true" size={18} /> Correção confirmada</span>
         )}
       </div>
+      {hasOpenQuestionPending ? <p className="mt-4 text-sm font-medium text-amber-800">Informe a nota de todas as questões abertas e atualize a revisão antes de confirmar.</p> : null}
       <ol className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {correction.answers.map((answer) => (
           <li className="border border-teal-100 bg-white px-3 py-2 text-sm" key={answer.examVersionQuestionId}>
             <strong className="text-slate-950">{String(answer.questionPosition).padStart(2, "0")}</strong>
-            <span className="mx-2 text-slate-500">{answer.selectedLetter ?? "-"} / {answer.correctLetter}</span>
-            <span className={answer.correct ? "font-semibold text-emerald-700" : answer.status === "NEEDS_REVIEW" ? "font-semibold text-amber-700" : "font-semibold text-rose-700"}>
-              {answer.correct ? "Correta" : answer.status === "NEEDS_REVIEW" || answer.status === "AMBIGUOUS" ? "Revisar" : answer.status === "BLANK" ? "Em branco" : "Errada"}
-            </span>
+            {answer.questionType === "DISCURSIVE" ? (
+              <span className={answer.awardedPoints === null ? "ml-2 font-semibold text-amber-700" : "ml-2 font-semibold text-teal-800"}>
+                {answer.awardedPoints === null ? "Nota pendente" : `${formatScore(answer.awardedPoints)} / ${formatScore(answer.maxPoints)}`}
+              </span>
+            ) : <><span className="mx-2 text-slate-500">{answer.selectedLetter ?? "-"} / {answer.correctLetter}</span><span className={answer.correct ? "font-semibold text-emerald-700" : answer.status === "NEEDS_REVIEW" ? "font-semibold text-amber-700" : "font-semibold text-rose-700"}>{answer.correct ? "Correta" : answer.status === "NEEDS_REVIEW" || answer.status === "AMBIGUOUS" ? "Revisar" : answer.status === "BLANK" ? "Em branco" : "Errada"}</span></>}
           </li>
         ))}
       </ol>

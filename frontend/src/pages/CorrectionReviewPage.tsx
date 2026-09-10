@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { useConfirmation } from "../components/ui/confirmationContext";
+import { MathText } from "../components/ui/MathText";
 import { confirmCorrection, getCorrections, updateCorrection } from "../services/correctionService";
 import { getExamVersions } from "../services/examService";
 import { ApiRequestError } from "../services/httpClient";
@@ -14,6 +15,7 @@ import type { ExamVersion } from "../types/exams";
 type DraftAnswer = {
   selectedAlternativeId: string | null;
   status: Exclude<StudentAnswerStatus, "CONFIRMED">;
+  awardedPoints: number | null;
 };
 
 export function CorrectionReviewPage() {
@@ -90,7 +92,9 @@ export function CorrectionReviewPage() {
     return selectedVersion.questions.some((question) => {
       const original = selectedCorrection.answers.find((answer) => answer.examVersionQuestionId === question.id);
       const draft = answers[question.id];
-      return original?.selectedAlternativeId !== (draft?.selectedAlternativeId ?? null) || original?.status !== (draft?.status ?? "BLANK");
+      return original?.selectedAlternativeId !== (draft?.selectedAlternativeId ?? null)
+        || original?.status !== (draft?.status ?? "BLANK")
+        || original?.awardedPoints !== (draft?.awardedPoints ?? null);
     });
   }, [answers, selectedCorrection, selectedVersion]);
 
@@ -98,7 +102,25 @@ export function CorrectionReviewPage() {
     if (!selectedCorrection) {
       return;
     }
-    setDraft({ correctionId: selectedCorrection.id, answers: { ...answers, [questionId]: { selectedAlternativeId, status } } });
+    setDraft({ correctionId: selectedCorrection.id, answers: { ...answers, [questionId]: { selectedAlternativeId, status, awardedPoints: null } } });
+    setNotice("");
+  }
+
+  function updateOpenScore(questionId: string, value: string) {
+    if (!selectedCorrection) {
+      return;
+    }
+    setDraft({
+      correctionId: selectedCorrection.id,
+      answers: {
+        ...answers,
+        [questionId]: {
+          selectedAlternativeId: null,
+          status: "NEEDS_REVIEW",
+          awardedPoints: value === "" ? null : Number(value)
+        }
+      }
+    });
     setNotice("");
   }
 
@@ -122,7 +144,8 @@ export function CorrectionReviewPage() {
       answers: selectedVersion.questions.map((question) => ({
         examVersionQuestionId: question.id,
         selectedAlternativeId: answers[question.id]?.selectedAlternativeId ?? null,
-        status: answers[question.id]?.status ?? "BLANK"
+        status: answers[question.id]?.status ?? (question.questionType === "DISCURSIVE" ? "NEEDS_REVIEW" : "BLANK"),
+        awardedPoints: answers[question.id]?.awardedPoints ?? null
       }))
     };
   }
@@ -231,6 +254,7 @@ export function CorrectionReviewPage() {
                   isSaving={isSaving}
                   onConfirm={() => void confirmSelectedCorrection()}
                   onSave={() => void saveChanges()}
+                  onUpdateOpenScore={updateOpenScore}
                   onUpdateAnswer={updateAnswer}
                   version={selectedVersion}
                 />
@@ -274,11 +298,17 @@ type ReviewEditorProps = {
   isSaving: boolean;
   onConfirm: () => void;
   onSave: () => void;
+  onUpdateOpenScore: (questionId: string, value: string) => void;
   onUpdateAnswer: (questionId: string, selectedAlternativeId: string | null, status: DraftAnswer["status"]) => void;
   version: ExamVersion;
 };
 
-function ReviewEditor({ answers, correction, hasUnsavedChanges, isSaving, onConfirm, onSave, onUpdateAnswer, version }: ReviewEditorProps) {
+function ReviewEditor({ answers, correction, hasUnsavedChanges, isSaving, onConfirm, onSave, onUpdateAnswer, onUpdateOpenScore, version }: ReviewEditorProps) {
+  const hasPendingOpenScore = version.questions.some((question) => (
+    question.questionType === "DISCURSIVE"
+    && (answers[question.id]?.awardedPoints ?? null) === null
+    && !correction.answers.find((answer) => answer.examVersionQuestionId === question.id)?.cancelled
+  ));
   return (
     <section className="min-w-0">
       <div className="flex flex-col gap-3 border-b border-stone-200 pb-5 sm:flex-row sm:items-start sm:justify-between">
@@ -296,6 +326,23 @@ function ReviewEditor({ answers, correction, hasUnsavedChanges, isSaving, onConf
       <div className="mt-5 space-y-3">
         {version.questions.map((question) => {
           const answer = answers[question.id];
+          if (question.questionType === "DISCURSIVE") {
+            const pending = (answer?.awardedPoints ?? null) === null;
+            return (
+              <article className={pending ? "border border-amber-300 bg-amber-50 p-4" : "border border-stone-200 bg-white p-4 shadow-panel"} key={question.id}>
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-end">
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-500">Questão {question.position} · aberta</p>
+                    <div className="mt-2 text-sm font-medium leading-6 text-slate-900"><MathText text={question.statement} /></div>
+                  </div>
+                  <label className="block text-sm font-medium text-slate-700" htmlFor={`review-open-score-${question.id}`}>
+                    Nota <span className="font-normal text-slate-500">(máx. {formatScore(question.points)})</span>
+                    <input className="mt-2 h-11 w-full border border-stone-300 bg-white px-3 text-slate-950 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id={`review-open-score-${question.id}`} max={question.points} min={0} onChange={(event) => onUpdateOpenScore(question.id, event.target.value)} placeholder="0" step="0.01" type="number" value={answer?.awardedPoints ?? ""} />
+                  </label>
+                </div>
+              </article>
+            );
+          }
           const needsReview = answer?.status === "NEEDS_REVIEW" || answer?.status === "AMBIGUOUS";
           return (
             <article className={needsReview ? "border border-amber-300 bg-amber-50 p-4" : "border border-stone-200 bg-white p-4 shadow-panel"} key={question.id}>
@@ -319,10 +366,10 @@ function ReviewEditor({ answers, correction, hasUnsavedChanges, isSaving, onConf
       </div>
 
       <section className="mt-6 flex flex-col gap-3 border-t border-stone-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
-        <p className={hasUnsavedChanges ? "text-sm font-medium text-amber-800" : "text-sm text-slate-500"}>{hasUnsavedChanges ? "Existem ajustes que precisam ser salvos antes da confirmação." : "A nota está revisada e pode ser confirmada."}</p>
+        <p className={hasUnsavedChanges || hasPendingOpenScore ? "text-sm font-medium text-amber-800" : "text-sm text-slate-500"}>{hasUnsavedChanges ? "Existem ajustes que precisam ser salvos antes da confirmação." : hasPendingOpenScore ? "Informe a nota de todas as questões abertas." : "A nota está revisada e pode ser confirmada."}</p>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button disabled={!hasUnsavedChanges || isSaving} icon={Save} onClick={onSave} variant="secondary">{isSaving ? "Salvando..." : "Salvar ajustes"}</Button>
-          <Button disabled={hasUnsavedChanges || isSaving} icon={CheckCircle2} onClick={onConfirm}>{isSaving ? "Confirmando..." : "Confirmar correção"}</Button>
+          <Button disabled={hasUnsavedChanges || hasPendingOpenScore || isSaving} icon={CheckCircle2} onClick={onConfirm}>{isSaving ? "Confirmando..." : "Confirmar correção"}</Button>
         </div>
       </section>
     </section>
@@ -347,7 +394,8 @@ function answersForCorrection(correction: Correction | null): Record<string, Dra
   }
   return Object.fromEntries(correction.answers.map((answer) => [answer.examVersionQuestionId, {
     selectedAlternativeId: answer.selectedAlternativeId,
-    status: answer.status === "CONFIRMED" ? "DETECTED" : answer.status
+    status: answer.status === "CONFIRMED" ? (answer.questionType === "DISCURSIVE" ? "NEEDS_REVIEW" : "DETECTED") : answer.status,
+    awardedPoints: answer.awardedPoints
   }]));
 }
 

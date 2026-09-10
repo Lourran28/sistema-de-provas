@@ -220,6 +220,18 @@ a {
   padding-left: 4px;
 }
 
+.print-open-answer-lines {
+  display: grid;
+  gap: 13px;
+  margin-top: 16px;
+}
+
+.print-open-answer-lines span {
+  border-bottom: 1px solid #94a3b8;
+  display: block;
+  height: 13px;
+}
+
 .print-document--answer-card,
 .print-document--answer-key {
   min-height: auto;
@@ -330,6 +342,14 @@ a {
   display: inline-block;
   height: 17px;
   width: 17px;
+}
+
+.answer-card-open-question {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 .answer-card-note {
