@@ -102,6 +102,7 @@ export type ExamVersionQuestion = {
   statement: string;
   imageUrl: string | null;
   questionType: QuestionType;
+  responseLines: number;
   alternatives: ExamVersionAlternative[];
 };
 

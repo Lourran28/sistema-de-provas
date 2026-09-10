@@ -47,6 +47,9 @@ public class QuestionEntity {
     @Column(name = "image_url", columnDefinition = "TEXT")
     private String imageUrl;
 
+    @Column(name = "response_lines", nullable = false)
+    private int responseLines;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -78,6 +81,18 @@ public class QuestionEntity {
             QuestionDifficulty difficulty,
             QuestionSourceType sourceType,
             String imageUrl) {
+        this(teacherId, subjectId, statement, questionType, difficulty, sourceType, imageUrl, 5);
+    }
+
+    public QuestionEntity(
+            UUID teacherId,
+            UUID subjectId,
+            String statement,
+            QuestionType questionType,
+            QuestionDifficulty difficulty,
+            QuestionSourceType sourceType,
+            String imageUrl,
+            int responseLines) {
         this.id = UUID.randomUUID();
         this.teacherId = teacherId;
         this.subjectId = subjectId;
@@ -87,6 +102,7 @@ public class QuestionEntity {
         this.sourceType = sourceType;
         this.status = QuestionStatus.ACTIVE;
         this.imageUrl = imageUrl;
+        this.responseLines = responseLines;
     }
 
     @PrePersist
@@ -106,12 +122,13 @@ public class QuestionEntity {
         updatedAt = Instant.now();
     }
 
-    public void update(UUID subjectId, String statement, QuestionType questionType, QuestionDifficulty difficulty, String imageUrl) {
+    public void update(UUID subjectId, String statement, QuestionType questionType, QuestionDifficulty difficulty, String imageUrl, int responseLines) {
         this.subjectId = subjectId;
         this.statement = statement;
         this.questionType = questionType;
         this.difficulty = difficulty;
         this.imageUrl = imageUrl;
+        this.responseLines = responseLines;
     }
 
     public void archive() {
@@ -140,6 +157,10 @@ public class QuestionEntity {
 
     public QuestionType getQuestionType() {
         return questionType;
+    }
+
+    public int getResponseLines() {
+        return responseLines;
     }
 
     public QuestionDifficulty getDifficulty() {

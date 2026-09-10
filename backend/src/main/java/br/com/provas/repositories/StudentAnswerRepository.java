@@ -12,4 +12,6 @@ public interface StudentAnswerRepository extends JpaRepository<StudentAnswerEnti
     List<StudentAnswerEntity> findAllByCorrectionId(UUID correctionId);
 
     void deleteByCorrectionId(UUID correctionId);
+
+    void deleteAllByCorrectionIdIn(List<UUID> correctionIds);
 }

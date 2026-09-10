@@ -47,8 +47,9 @@ a {
 }
 
 .print-toolbar {
-  display: flex;
   align-items: center;
+  display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   justify-content: space-between;
   margin-bottom: 24px;
@@ -56,7 +57,18 @@ a {
 
 .print-toolbar__title {
   flex: 1;
-  min-width: 0;
+  min-width: 150px;
+}
+
+.print-toolbar__options {
+  align-items: center;
+  border-top: 1px solid #e7e5e4;
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: 12px;
+  order: 4;
+  padding-top: 12px;
 }
 
 .print-toolbar__actions {
@@ -187,10 +199,20 @@ a {
 
 .print-questions > li {
   break-inside: avoid;
+  border-bottom: 1px solid #e7e5e4;
   counter-increment: question;
   font-size: 13px;
   line-height: 1.55;
-  margin: 0 0 22px;
+  margin: 0 0 18px;
+  padding-bottom: 18px;
+}
+
+.print-questions > li:last-child {
+  border-bottom: 0;
+}
+
+.print-questions > li.print-question--open {
+  break-inside: auto;
 }
 
 .print-question-statement {
@@ -211,13 +233,19 @@ a {
 }
 
 .print-alternatives {
+  list-style: none;
   margin: 0;
-  padding-left: 26px;
+  padding-left: 0;
 }
 
 .print-alternatives li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
   margin: 5px 0;
-  padding-left: 4px;
+}
+
+.print-alternative-letter {
+  font-weight: 700;
 }
 
 .print-open-answer-lines {
@@ -381,6 +409,7 @@ a {
   border: 1px solid #475569;
   display: flex;
   font-size: 14px;
+  gap: 10px;
   justify-content: space-between;
   padding: 10px 12px;
 }
@@ -392,6 +421,10 @@ a {
 .answer-key-grid strong {
   color: #111827;
   font-size: 18px;
+}
+
+.answer-key-grid strong.answer-key-manual {
+  font-size: 13px;
 }
 
 .print-floating-action {

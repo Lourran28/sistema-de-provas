@@ -14,6 +14,8 @@ public interface ExamApplicationRepository extends JpaRepository<ExamApplication
 
     List<ExamApplicationEntity> findAllByExamIdOrderByAppliedOnDescCreatedAtDesc(UUID examId);
 
+    List<ExamApplicationEntity> findAllByTeacherIdAndClassGroupIgnoreCase(UUID teacherId, String classGroup);
+
     List<ExamApplicationEntity> findAllByTeacherIdAndAppliedOnBetweenOrderByAppliedOnAscCreatedAtAsc(
             UUID teacherId,
             LocalDate start,

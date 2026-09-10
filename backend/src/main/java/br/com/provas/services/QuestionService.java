@@ -128,7 +128,8 @@ public class QuestionService {
                 request.questionType(),
                 request.difficulty(),
                 QuestionSourceType.MANUAL,
-                normalizeImageUrl(request.imageUrl())));
+                normalizeImageUrl(request.imageUrl()),
+                resolveResponseLines(request)));
         replaceDetails(question.getId(), data.contentId(), request);
         return get(teacherId, question.getId());
     }
@@ -149,7 +150,8 @@ public class QuestionService {
                     request.questionType(),
                     request.difficulty(),
                     question.getSourceType(),
-                    normalizeImageUrl(request.imageUrl())));
+                    normalizeImageUrl(request.imageUrl()),
+                    resolveResponseLines(request)));
             replaceDetails(revision.getId(), data.contentId(), request);
             return get(teacherId, revision.getId());
         }
@@ -159,7 +161,8 @@ public class QuestionService {
                 normalizeStatement(request.statement()),
                 request.questionType(),
                 request.difficulty(),
-                normalizeImageUrl(request.imageUrl()));
+                normalizeImageUrl(request.imageUrl()),
+                resolveResponseLines(request));
         questionRepository.save(question);
         replaceDetails(questionId, data.contentId(), request);
         return get(teacherId, questionId);
@@ -326,6 +329,16 @@ public class QuestionService {
                 || request.correctAlternativeIndex() >= alternatives.size()) {
             throw new IllegalArgumentException("Selecione uma alternativa correta válida.");
         }
+    }
+
+    private int resolveResponseLines(QuestionRequest request) {
+        int responseLines = request.questionType() == QuestionType.DISCURSIVE && request.responseLines() != null
+                ? request.responseLines()
+                : 5;
+        if (responseLines < 1 || responseLines > 30) {
+            throw new IllegalArgumentException("A questão aberta deve possuir entre 1 e 30 linhas para resposta.");
+        }
+        return responseLines;
     }
 
     private Map<UUID, List<UUID>> findContentIdsByQuestion(List<QuestionEntity> questions) {

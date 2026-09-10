@@ -5,6 +5,8 @@ import java.util.UUID;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
@@ -24,5 +26,20 @@ public record QuestionRequest(
         @NotNull(message = "Informe a dificuldade.")
         QuestionDifficulty difficulty,
         List<@Valid AlternativeRequest> alternatives,
-        Integer correctAlternativeIndex) {
+        Integer correctAlternativeIndex,
+        @Min(value = 1, message = "A questão aberta deve possuir pelo menos 1 linha para resposta.")
+        @Max(value = 30, message = "A questão aberta deve possuir no máximo 30 linhas para resposta.")
+        Integer responseLines) {
+
+    public QuestionRequest(
+            UUID subjectId,
+            UUID contentId,
+            String statement,
+            String imageUrl,
+            QuestionType questionType,
+            QuestionDifficulty difficulty,
+            List<AlternativeRequest> alternatives,
+            Integer correctAlternativeIndex) {
+        this(subjectId, contentId, statement, imageUrl, questionType, difficulty, alternatives, correctAlternativeIndex, null);
+    }
 }

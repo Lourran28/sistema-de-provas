@@ -117,7 +117,7 @@ export function PrintVersionPage() {
           <p className="text-xs text-slate-500">{exam.title}</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="print-toolbar__options">
           <div className="flex items-center gap-1.5 text-xs text-slate-600">
             <span className="font-medium">Layout Prova:</span>
             <select
@@ -184,17 +184,20 @@ export function PrintVersionPage() {
 
           <ol className={`print-questions ${examLayout === "double" ? "print-questions--two-columns" : ""}`}>
             {version.questions.map((question) => (
-              <li key={question.id}>
+              <li className={question.questionType === "DISCURSIVE" ? "print-question--open" : undefined} key={question.id}>
                 <p className="print-question-statement"><MathText text={question.statement} /></p>
                 {question.imageUrl ? <img alt={`Imagem de apoio da questão ${question.position}`} className="print-question-image" referrerPolicy="no-referrer" src={question.imageUrl} /> : null}
                 {question.questionType === "DISCURSIVE" ? (
                   <div aria-label="Espaço para resposta" className="print-open-answer-lines">
-                    {Array.from({ length: 5 }, (_, index) => <span key={index} />)}
+                    {Array.from({ length: question.responseLines ?? 5 }, (_, index) => <span key={index} />)}
                   </div>
                 ) : (
-                  <ol className="print-alternatives" type="A">
-                    {question.alternatives.map((alternative) => (
-                      <li key={alternative.alternativeId}><MathText text={alternative.text} /></li>
+                  <ol className="print-alternatives">
+                    {question.alternatives.map((alternative, index) => (
+                      <li key={alternative.alternativeId}>
+                        <strong aria-hidden="true" className="print-alternative-letter">{String.fromCharCode(65 + index)})</strong>
+                        <span><MathText text={alternative.text} /></span>
+                      </li>
                     ))}
                   </ol>
                 )}
@@ -261,7 +264,7 @@ export function PrintVersionPage() {
             {version.questions.map((question) => (
               <li key={question.id}>
                 <span>{String(question.position).padStart(2, "0")}</span>
-                <strong>{question.questionType === "DISCURSIVE" ? "Manual" : answerKeyByPosition.get(question.position) ?? "-"}</strong>
+                <strong className={question.questionType === "DISCURSIVE" ? "answer-key-manual" : undefined}>{question.questionType === "DISCURSIVE" ? "Manual" : answerKeyByPosition.get(question.position) ?? "-"}</strong>
               </li>
             ))}
           </ol>

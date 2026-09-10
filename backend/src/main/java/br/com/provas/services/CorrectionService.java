@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import br.com.provas.dtos.corrections.CorrectionAnswerRequest;
 import br.com.provas.dtos.corrections.CorrectionAnswerResponse;
+import br.com.provas.dtos.corrections.CorrectionBatchConfirmRequest;
+import br.com.provas.dtos.corrections.CorrectionBatchConfirmResponse;
 import br.com.provas.dtos.corrections.CorrectionRequest;
 import br.com.provas.dtos.corrections.CorrectionResponse;
 import br.com.provas.entities.AlternativeEntity;
@@ -146,6 +148,49 @@ public class CorrectionService {
         correctionRepository.save(correction);
         studentAnswerRepository.saveAll(answers);
         return toResponse(correction, context, answers);
+    }
+
+    @Transactional
+    public CorrectionBatchConfirmResponse confirmBatch(UUID teacherId, CorrectionBatchConfirmRequest request) {
+        String classGroup = blankToNull(request.classGroup());
+        if (classGroup == null) {
+            throw new IllegalArgumentException("Informe a turma que deve ser finalizada.");
+        }
+        VersionContext context = loadVersionContext(teacherId, request.examVersionId());
+        List<CorrectionEntity> corrections = correctionRepository
+                .findAllByTeacherIdAndExamVersionIdAndStatus(teacherId, request.examVersionId(), CorrectionStatus.NEEDS_REVIEW)
+                .stream()
+                .filter(correction -> correction.getClassGroup() != null
+                        && correction.getClassGroup().equalsIgnoreCase(classGroup))
+                .toList();
+        if (corrections.isEmpty()) {
+            throw new IllegalArgumentException("Não há correções pendentes desta prova para a turma informada.");
+        }
+
+        Map<UUID, List<StudentAnswerEntity>> answersByCorrectionId = new HashMap<>();
+        for (CorrectionEntity correction : corrections) {
+            List<StudentAnswerEntity> answers = studentAnswerRepository.findAllByCorrectionId(correction.getId());
+            validatePersistedAnswers(context, answers);
+            answersByCorrectionId.put(correction.getId(), answers);
+        }
+
+        List<CorrectionResponse> responses = new ArrayList<>();
+        for (CorrectionEntity correction : corrections) {
+            List<StudentAnswerEntity> answers = answersByCorrectionId.get(correction.getId());
+            correction.confirm();
+            answers.forEach(StudentAnswerEntity::markConfirmed);
+            correctionRepository.save(correction);
+            studentAnswerRepository.saveAll(answers);
+            responses.add(toResponse(correction, context, answers));
+        }
+        return new CorrectionBatchConfirmResponse(responses.size(), responses);
+    }
+
+    @Transactional
+    public void delete(UUID teacherId, UUID correctionId) {
+        CorrectionEntity correction = findCorrection(teacherId, correctionId);
+        studentAnswerRepository.deleteByCorrectionId(correctionId);
+        correctionRepository.delete(correction);
     }
 
     @Transactional(readOnly = true)
@@ -477,6 +522,11 @@ public class CorrectionService {
                     && (examQuestion == null || !examQuestion.isCancelled())
                     && answer.getAwardedPoints() == null) {
                 throw new IllegalStateException("Informe a nota de todas as questões abertas antes de confirmar a correção.");
+            }
+            if (versionQuestion.getQuestionType() != QuestionType.DISCURSIVE
+                    && (answer.getStatus() == StudentAnswerStatus.AMBIGUOUS
+                    || answer.getStatus() == StudentAnswerStatus.NEEDS_REVIEW)) {
+                throw new IllegalStateException("Revise todas as marcações pendentes antes de confirmar a correção.");
             }
         }
     }

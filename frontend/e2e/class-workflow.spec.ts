@@ -52,17 +52,25 @@ test("content form has the requested fields and file import", async ({ page }, t
 
 test("shows class performance and trend", async ({ page }, testInfo) => {
   await authenticate(page);
+  let deletedClass = "";
   const correction = (id: string, classGroup: string, score: number, createdAt: string) => ({
     id, examVersionId: "version-1", examTitle: "Prova de Português", versionLabel: "A", studentId: null, studentName: "Registro da turma", studentIdentifier: null, classGroup,
     status: "CONFIRMED", score, totalScore: 10, correctCount: score, wrongCount: 10 - score, blankCount: 0, ambiguousCount: 0, reviewedAt: createdAt, createdAt, answers: []
   });
   await page.route("**/api/corrections", (route) => route.fulfill({ json: [correction("c1", "8º A", 5, "2026-08-01T12:00:00Z"), correction("c2", "8º A", 8, "2026-09-01T12:00:00Z"), correction("c3", "8º B", 6, "2026-09-01T12:00:00Z")] }));
+  await page.route("**/api/corrections/class-data?*", async (route) => {
+    deletedClass = new URL(route.request().url()).searchParams.get("classGroup") ?? "";
+    await route.fulfill({ json: { deletedCorrections: 2, deletedApplications: 1 } });
+  });
   await page.goto("/resultados");
   await expect(page.getByRole("heading", { name: "Desempenho das turmas" })).toBeVisible();
   await expect(page.locator("h2:visible", { hasText: "8º A" })).toBeVisible();
   await expect(page.locator('span:visible:text-is("+30 p.p.")')).toBeVisible();
   await expect(page.getByText("Aluno", { exact: true })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("class-performance.png"), fullPage: true });
+  await page.getByRole("button", { name: "Excluir turma" }).click();
+  await page.getByRole("button", { name: "Excluir dados da turma" }).click();
+  await expect.poll(() => deletedClass).toBe("8º A");
 });
 
 test("question editing confirms the saved action", async ({ page }) => {
@@ -105,6 +113,7 @@ test("creates an open question without alternatives", async ({ page }, testInfo)
   await page.getByRole("button", { name: "Nova questão" }).click();
   await page.getByText("Questão aberta", { exact: true }).click();
   await page.getByLabel("Enunciado").fill("Explique sua resposta.");
+  await page.getByLabel("Quantidade de linhas para resposta").fill("12");
   await expect(page.getByText("Alternativas", { exact: true })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("open-question-form.png"), fullPage: true });
   await page.getByRole("button", { name: "Salvar questão" }).click();
@@ -113,7 +122,80 @@ test("creates an open question without alternatives", async ({ page }, testInfo)
     questionType: "DISCURSIVE",
     alternatives: [],
     correctAlternativeIndex: null,
+    responseLines: 12,
   });
+});
+
+test("prints explicit alternative letters and the selected open-answer lines", async ({ page }, testInfo) => {
+  await authenticate(page);
+  const version = {
+    id: "print-version", examId: "print-exam", examTitle: "Avaliação organizada", label: "A", status: "GENERATED", generatedAt: now,
+    questions: [
+      { id: "print-objective", originalQuestionId: "q1", position: 1, points: 5, statement: "Marque a opção.", imageUrl: null, questionType: "MULTIPLE_CHOICE", responseLines: 5, alternatives: [{ alternativeId: "a1", text: "Primeira", position: 1 }, { alternativeId: "a2", text: "Segunda", position: 2 }] },
+      { id: "print-open", originalQuestionId: "q2", position: 2, points: 5, statement: "Explique.", imageUrl: null, questionType: "DISCURSIVE", responseLines: 12, alternatives: [] },
+    ],
+    answerKey: [{ questionPosition: 1, correctAlternativeId: "a1", correctLetter: "A" }],
+  };
+  await page.route("**/api/exam-versions/print-version", (route) => route.fulfill({ json: version }));
+  await page.route("**/api/exams/print-exam", (route) => route.fulfill({ json: { id: "print-exam", subjectId: subject.id, title: "Avaliação organizada", classGroup: "8º A", topic: null, description: null, instructions: null, examDate: null, totalScore: 10, questionCount: 2, kind: "PROVA", status: "VERSIONS_GENERATED", contents: [], questions: [], createdAt: now, updatedAt: now } }));
+  await page.route("**/api/subjects", (route) => route.fulfill({ json: [subject] }));
+
+  await page.goto("/imprimir/versoes/print-version");
+
+  await expect(page.locator(".print-alternative-letter")).toHaveText(["A)", "B)"]);
+  await expect(page.locator(".print-open-answer-lines span")).toHaveCount(12);
+  await page.screenshot({ path: testInfo.outputPath("organized-exam.png"), fullPage: true });
+});
+
+test("finalizes every reviewed card from one class and version", async ({ page }, testInfo) => {
+  await authenticate(page);
+  const version = {
+    id: "batch-version", examId: "batch-exam", examTitle: "Avaliação em lote", label: "B", status: "GENERATED", generatedAt: now,
+    questions: [{ id: "batch-question", originalQuestionId: "q1", position: 1, points: 10, statement: "Marque.", imageUrl: null, questionType: "MULTIPLE_CHOICE", responseLines: 5, alternatives: [{ alternativeId: "a1", text: "Certa", position: 1 }, { alternativeId: "a2", text: "Errada", position: 2 }] }],
+    answerKey: [{ questionPosition: 1, correctAlternativeId: "a1", correctLetter: "A" }],
+  };
+  const correction = (id: string) => ({
+    id, examVersionId: version.id, examTitle: version.examTitle, versionLabel: version.label, studentId: null, studentName: "Registro da turma", studentIdentifier: null, classGroup: "8º A", status: "NEEDS_REVIEW", score: 10, totalScore: 10, correctCount: 1, wrongCount: 0, blankCount: 0, ambiguousCount: 0, reviewedAt: null, createdAt: now,
+    answers: [{ examVersionQuestionId: "batch-question", questionPosition: 1, selectedAlternativeId: "a1", selectedLetter: "A", correctLetter: "A", questionType: "MULTIPLE_CHOICE", awardedPoints: null, maxPoints: 10, status: "DETECTED", correct: true, cancelled: false }],
+  });
+  const corrections = [correction("batch-c1"), correction("batch-c2")];
+  let finalized = false;
+  await page.route("**/api/corrections", (route) => route.fulfill({ json: corrections }));
+  await page.route("**/api/exam-versions", (route) => route.fulfill({ json: [version] }));
+  await page.route("**/api/corrections/confirm-batch", async (route) => {
+    finalized = true;
+    expect(route.request().postDataJSON()).toEqual({ examVersionId: version.id, classGroup: "8º A" });
+    await route.fulfill({ json: { confirmedCount: 2, corrections: corrections.map((item) => ({ ...item, status: "CONFIRMED" })) } });
+  });
+
+  await page.goto("/revisar-correcoes?turma=8%C2%BA%20A&versao=batch-version");
+  await expect(page.getByRole("button", { name: "Finalizar turma (2)" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("grouped-review.png"), fullPage: true });
+  await page.getByRole("button", { name: "Finalizar turma (2)" }).click();
+  await page.getByRole("button", { name: "Finalizar 2 correções" }).click();
+
+  await expect.poll(() => finalized).toBe(true);
+  await expect(page).toHaveURL(/\/resultados\?turma=8%C2%BA%20A/);
+});
+
+test("separates pending card batches by class and official version", async ({ page }, testInfo) => {
+  await authenticate(page);
+  const versions = ["A", "B"].map((label) => ({
+    id: `version-${label}`, examId: "exam-1", examTitle: "Prova de Português", label, status: "GENERATED", generatedAt: now, questions: [], answerKey: [],
+  }));
+  const correction = (id: string, classGroup: string, versionLabel: string) => ({
+    id, examVersionId: `version-${versionLabel}`, examTitle: "Prova de Português", versionLabel, studentId: null, studentName: "Registro da turma", studentIdentifier: null, classGroup, status: "NEEDS_REVIEW", score: 0, totalScore: 10, correctCount: 0, wrongCount: 0, blankCount: 0, ambiguousCount: 1, reviewedAt: null, createdAt: now, answers: [],
+  });
+  await page.route("**/api/exam-versions", (route) => route.fulfill({ json: versions }));
+  await page.route("**/api/corrections", (route) => route.fulfill({ json: [correction("c1", "8º A", "A"), correction("c2", "8º A", "A"), correction("c3", "8º B", "B")] }));
+
+  await page.goto("/correcao-em-lote");
+
+  await expect(page.getByRole("heading", { name: "Turmas em correção" })).toBeVisible();
+  await expect(page.getByText("2 cartões aguardando revisão")).toBeVisible();
+  await expect(page.getByText("1 cartão aguardando revisão")).toBeVisible();
+  await expect(page.locator("#batch-version optgroup")).toHaveAttribute("label", /Prova de Português · gerada em/);
+  await page.screenshot({ path: testInfo.outputPath("separated-batches.png"), fullPage: true });
 });
 
 test("adds the manual grade of an open question to a mixed correction", async ({ page }, testInfo) => {

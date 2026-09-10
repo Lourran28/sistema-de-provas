@@ -1,4 +1,4 @@
-import { AlignLeft, CircleCheck, ImagePlus, ListChecks, Plus, Save, Trash2, X } from "lucide-react";
+import { AlignLeft, CircleCheck, ImagePlus, ListChecks, Minus, Plus, Save, Trash2, X } from "lucide-react";
 import { type ChangeEvent, type FormEvent, useState } from "react";
 
 import { Button } from "../../components/ui/Button";
@@ -24,6 +24,7 @@ export function QuestionFormModal({ onClose, onCreateSubject, onSave, question, 
   const [statement, setStatement] = useState(question?.statement ?? "");
   const [imageUrl, setImageUrl] = useState(question?.imageUrl ?? "");
   const [questionType, setQuestionType] = useState<QuestionType>(question?.questionType === "DISCURSIVE" ? "DISCURSIVE" : "MULTIPLE_CHOICE");
+  const [responseLines, setResponseLines] = useState(question?.responseLines ?? 5);
   const [difficulty, setDifficulty] = useState<QuestionDifficulty>(question?.difficulty ?? "MEDIUM");
   const [alternatives, setAlternatives] = useState(() =>
     question ? question.alternatives.map((alternative) => ({ text: alternative.text })) : emptyAlternatives
@@ -103,6 +104,7 @@ export function QuestionFormModal({ onClose, onCreateSubject, onSave, question, 
         statement,
         imageUrl: imageUrl.trim() || undefined,
         questionType,
+        responseLines: questionType === "DISCURSIVE" ? responseLines : undefined,
         difficulty,
         alternatives: questionType === "DISCURSIVE" ? [] : alternatives,
         correctAlternativeIndex: questionType === "DISCURSIVE" ? null : correctAlternativeIndex
@@ -304,10 +306,27 @@ export function QuestionFormModal({ onClose, onCreateSubject, onSave, question, 
               ))}
             </div>
           </fieldset> : (
-            <div className="border-y border-stone-200 py-4">
+            <div className="flex flex-col gap-4 border-y border-stone-200 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3 text-sm text-slate-700">
-                <AlignLeft aria-hidden="true" className="text-teal-800" size={19} />
+                <AlignLeft aria-hidden="true" className="shrink-0 text-teal-800" size={19} />
                 <span>A nota será informada pelo professor durante a correção.</span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-700">Linhas para resposta</p>
+                <div className="mt-2 flex h-10 items-center border border-stone-300 bg-white">
+                  <Button aria-label="Diminuir linhas" className="h-9 w-9 rounded-none px-0" disabled={responseLines <= 1} icon={Minus} onClick={() => setResponseLines((current) => Math.max(1, current - 1))} title="Diminuir linhas" variant="ghost" />
+                  <input
+                    aria-label="Quantidade de linhas para resposta"
+                    className="h-full w-16 border-x border-stone-300 text-center text-sm font-semibold outline-none focus:ring-2 focus:ring-inset focus:ring-teal-100"
+                    max={30}
+                    min={1}
+                    onChange={(event) => setResponseLines(Math.min(30, Math.max(1, Number(event.target.value) || 1)))}
+                    type="number"
+                    value={responseLines}
+                  />
+                  <Button aria-label="Aumentar linhas" className="h-9 w-9 rounded-none px-0" disabled={responseLines >= 30} icon={Plus} onClick={() => setResponseLines((current) => Math.min(30, current + 1))} title="Aumentar linhas" variant="ghost" />
+                </div>
+                <p className="mt-1 text-xs text-slate-500">De 1 a 30 linhas.</p>
               </div>
             </div>
           )}

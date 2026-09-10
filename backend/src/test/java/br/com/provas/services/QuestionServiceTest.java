@@ -109,11 +109,24 @@ class QuestionServiceTest {
                 QuestionType.DISCURSIVE,
                 QuestionDifficulty.MEDIUM,
                 List.of(),
-                null));
+                null,
+                24));
 
         assertEquals(QuestionType.DISCURSIVE, response.questionType());
+        assertEquals(24, response.responseLines());
         assertEquals(List.of(), response.alternatives());
         verify(alternativeRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void rejectsMoreThanThirtyLinesForADiscursiveQuestion() {
+        UUID teacherId = UUID.randomUUID();
+        QuestionRequest request = new QuestionRequest(
+                null, null, "Explique sua resposta.", null,
+                QuestionType.DISCURSIVE, QuestionDifficulty.MEDIUM, List.of(), null, 31);
+
+        assertThrows(IllegalArgumentException.class, () -> questionService.create(teacherId, request));
+        verify(questionRepository, never()).save(any());
     }
 
     @Test

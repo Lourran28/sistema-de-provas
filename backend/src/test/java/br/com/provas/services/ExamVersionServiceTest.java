@@ -38,6 +38,7 @@ import br.com.provas.entities.ExamVersionEntity;
 import br.com.provas.entities.ExamVersionQuestionEntity;
 import br.com.provas.entities.QuestionDifficulty;
 import br.com.provas.entities.QuestionEntity;
+import br.com.provas.entities.QuestionSourceType;
 import br.com.provas.entities.QuestionType;
 import br.com.provas.repositories.AlternativeRepository;
 import br.com.provas.repositories.AnswerKeyItemRepository;
@@ -218,7 +219,8 @@ class ExamVersionServiceTest {
         QuestionEntity objective = new QuestionEntity(
                 teacherId, null, "Questão objetiva", QuestionType.MULTIPLE_CHOICE, QuestionDifficulty.MEDIUM);
         QuestionEntity discursive = new QuestionEntity(
-                teacherId, null, "Questão aberta", QuestionType.DISCURSIVE, QuestionDifficulty.MEDIUM);
+                teacherId, null, "Questão aberta", QuestionType.DISCURSIVE, QuestionDifficulty.MEDIUM,
+                QuestionSourceType.MANUAL, null, 23);
         ExamQuestionEntity objectiveExamQuestion = new ExamQuestionEntity(
                 exam.getId(), objective.getId(), 1, new BigDecimal("5.00"));
         ExamQuestionEntity discursiveExamQuestion = new ExamQuestionEntity(
@@ -255,6 +257,7 @@ class ExamVersionServiceTest {
                     .findFirst()
                     .orElseThrow();
             assertTrue(openQuestion.alternatives().isEmpty());
+            assertEquals(23, openQuestion.responseLines());
         }
     }
 

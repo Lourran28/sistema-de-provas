@@ -34,6 +34,9 @@ public class ExamVersionQuestionEntity {
     @Column(name = "question_type", nullable = false, length = 40)
     private QuestionType questionType;
 
+    @Column(name = "response_lines", nullable = false)
+    private int responseLines;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -50,12 +53,23 @@ public class ExamVersionQuestionEntity {
             UUID originalQuestionId,
             int position,
             QuestionType questionType) {
+        this(examVersionId, examQuestionId, originalQuestionId, position, questionType, 5);
+    }
+
+    public ExamVersionQuestionEntity(
+            UUID examVersionId,
+            UUID examQuestionId,
+            UUID originalQuestionId,
+            int position,
+            QuestionType questionType,
+            int responseLines) {
         this.id = UUID.randomUUID();
         this.examVersionId = examVersionId;
         this.examQuestionId = examQuestionId;
         this.originalQuestionId = originalQuestionId;
         this.position = position;
         this.questionType = questionType;
+        this.responseLines = responseLines;
     }
 
     @PrePersist
@@ -90,5 +104,9 @@ public class ExamVersionQuestionEntity {
 
     public QuestionType getQuestionType() {
         return questionType;
+    }
+
+    public int getResponseLines() {
+        return responseLines;
     }
 }

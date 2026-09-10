@@ -1,8 +1,10 @@
-import { CheckCircle2, ClipboardCheck, Clock3, School, Search, UsersRound } from "lucide-react";
+import { CheckCircle2, ClipboardCheck, Clock3, School, Search, Trash2, UsersRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Card } from "../components/ui/Card";
-import { getCorrections } from "../services/correctionService";
+import { Button } from "../components/ui/Button";
+import { useConfirmation } from "../components/ui/confirmationContext";
+import { deleteClassData, getCorrections } from "../services/correctionService";
 import { getExamApplications } from "../services/examApplicationService";
 import { getExams } from "../services/examService";
 import { ApiRequestError } from "../services/httpClient";
@@ -23,6 +25,7 @@ type ClassDashboardData = {
 };
 
 export function StudentsPage() {
+  const { confirm } = useConfirmation();
   const [data, setData] = useState<ClassDashboardData>({ applications: [], corrections: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -55,6 +58,17 @@ export function StudentsPage() {
       : classes;
   }, [classes, search]);
   const summary = useMemo(() => summarizeClasses(classes), [classes]);
+
+  async function removeClass(classGroup: string) {
+    if (classGroup === "Sem turma" || !(await confirm({ confirmLabel: "Excluir dados da turma", description: `Excluir aplicações e correções da turma ${classGroup}? Provas e questões serão preservadas.`, title: "Excluir turma", variant: "danger" }))) return;
+    setError("");
+    try {
+      await deleteClassData(classGroup);
+      setData((current) => ({ applications: current.applications.filter((item) => normalizeSearch(item.classGroup) !== normalizeSearch(classGroup)), corrections: current.corrections.filter((item) => normalizeSearch(item.classGroup || "Sem turma") !== normalizeSearch(classGroup)) }));
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "Não foi possível excluir os dados da turma."));
+    }
+  }
 
   return (
     <div className="space-y-7">
@@ -109,15 +123,16 @@ export function StudentsPage() {
                       <th className="px-5 py-3 text-right">Cartões corrigidos</th>
                       <th className="px-5 py-3 text-right">Em revisão</th>
                       <th className="px-5 py-3">Situação</th>
+                      <th className="px-5 py-3"><span className="sr-only">Ações</span></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-200">
-                    {visibleClasses.map((item) => <ClassRow item={item} key={item.classGroup} />)}
+                    {visibleClasses.map((item) => <ClassRow item={item} key={item.classGroup} onDelete={() => void removeClass(item.classGroup)} />)}
                   </tbody>
                 </table>
               </div>
               <div className="space-y-3 xl:hidden">
-                {visibleClasses.map((item) => <ClassCard item={item} key={item.classGroup} />)}
+                {visibleClasses.map((item) => <ClassCard item={item} key={item.classGroup} onDelete={() => void removeClass(item.classGroup)} />)}
               </div>
             </section>
           )}
@@ -127,7 +142,7 @@ export function StudentsPage() {
   );
 }
 
-function ClassRow({ item }: { item: ClassProgress }) {
+function ClassRow({ item, onDelete }: { item: ClassProgress; onDelete: () => void }) {
   return (
     <tr className="text-slate-700">
       <td className="min-w-56 px-5 py-4">
@@ -138,11 +153,12 @@ function ClassRow({ item }: { item: ClassProgress }) {
       <NumberCell className="font-semibold text-emerald-700" value={item.confirmedCount} />
       <NumberCell className="text-amber-700" value={item.pendingReviewCount} />
       <td className="min-w-44 px-5 py-4"><ClassStatus item={item} /></td>
+      <td className="px-5 py-4 text-right">{item.classGroup !== "Sem turma" ? <Button aria-label={`Excluir turma ${item.classGroup}`} className="h-9 w-9 px-0 text-rose-700" icon={Trash2} onClick={onDelete} title="Excluir turma" variant="ghost" /> : null}</td>
     </tr>
   );
 }
 
-function ClassCard({ item }: { item: ClassProgress }) {
+function ClassCard({ item, onDelete }: { item: ClassProgress; onDelete: () => void }) {
   return (
     <Card className="p-4">
       <div className="flex items-start justify-between gap-4">
@@ -150,7 +166,7 @@ function ClassCard({ item }: { item: ClassProgress }) {
           <h2 className="text-base font-semibold text-slate-950">{item.classGroup}</h2>
           <p className="mt-1 text-xs text-slate-500">{classDetails(item)}</p>
         </div>
-        <ClassStatus item={item} />
+        <div className="flex items-center gap-2"><ClassStatus item={item} />{item.classGroup !== "Sem turma" ? <Button aria-label={`Excluir turma ${item.classGroup}`} className="h-9 w-9 px-0 text-rose-700" icon={Trash2} onClick={onDelete} title="Excluir turma" variant="ghost" /> : null}</div>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-stone-200 py-4 text-sm">
         <MetricValue label="Aplicações" value={item.applicationCount} />

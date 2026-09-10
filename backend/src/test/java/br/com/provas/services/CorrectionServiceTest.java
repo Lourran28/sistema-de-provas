@@ -19,12 +19,15 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import br.com.provas.dtos.corrections.CorrectionAnswerRequest;
+import br.com.provas.dtos.corrections.CorrectionBatchConfirmRequest;
+import br.com.provas.dtos.corrections.CorrectionBatchConfirmResponse;
 import br.com.provas.dtos.corrections.CorrectionRequest;
 import br.com.provas.dtos.corrections.CorrectionResponse;
 import br.com.provas.entities.AlternativeEntity;
 import br.com.provas.entities.AnswerKeyEntity;
 import br.com.provas.entities.AnswerKeyItemEntity;
 import br.com.provas.entities.CorrectionEntity;
+import br.com.provas.entities.CorrectionStatus;
 import br.com.provas.entities.ExamEntity;
 import br.com.provas.entities.ExamQuestionEntity;
 import br.com.provas.entities.ExamVersionAlternativeEntity;
@@ -193,6 +196,48 @@ class CorrectionServiceTest {
         when(studentAnswerRepository.findAllByCorrectionId(draft.id())).thenReturn(savedAnswers.get());
 
         assertThrows(IllegalStateException.class, () -> correctionService.confirm(fixture.teacherId(), draft.id()));
+    }
+
+    @Test
+    void confirmsEveryReviewedCardFromTheSameClassAndVersion() {
+        Fixture fixture = configureFixture();
+        CorrectionEntity first = reviewedCorrection(fixture, "8º A");
+        CorrectionEntity second = reviewedCorrection(fixture, "8º A");
+        CorrectionEntity anotherClass = reviewedCorrection(fixture, "8º B");
+        List<StudentAnswerEntity> firstAnswers = reviewedAnswers(fixture, first);
+        List<StudentAnswerEntity> secondAnswers = reviewedAnswers(fixture, second);
+
+        when(correctionRepository.findAllByTeacherIdAndExamVersionIdAndStatus(
+                fixture.teacherId(), fixture.version().getId(), CorrectionStatus.NEEDS_REVIEW))
+                .thenReturn(List.of(first, second, anotherClass));
+        when(studentAnswerRepository.findAllByCorrectionId(first.getId())).thenReturn(firstAnswers);
+        when(studentAnswerRepository.findAllByCorrectionId(second.getId())).thenReturn(secondAnswers);
+
+        CorrectionBatchConfirmResponse response = correctionService.confirmBatch(
+                fixture.teacherId(),
+                new CorrectionBatchConfirmRequest(fixture.version().getId(), "8º A"));
+
+        assertEquals(2, response.confirmedCount());
+        assertEquals(CorrectionStatus.CONFIRMED, first.getStatus());
+        assertEquals(CorrectionStatus.CONFIRMED, second.getStatus());
+        assertEquals(CorrectionStatus.NEEDS_REVIEW, anotherClass.getStatus());
+        assertEquals(StudentAnswerStatus.CONFIRMED, firstAnswers.getFirst().getStatus());
+    }
+
+    private CorrectionEntity reviewedCorrection(Fixture fixture, String classGroup) {
+        CorrectionEntity correction = new CorrectionEntity(
+                fixture.teacherId(), fixture.version().getId(), null, "Registro da turma", null, classGroup);
+        correction.update(null, "Registro da turma", null, classGroup,
+                new CorrectionEntity.Summary(new BigDecimal("5.00"), 1, 0, 1, 0));
+        return correction;
+    }
+
+    private List<StudentAnswerEntity> reviewedAnswers(Fixture fixture, CorrectionEntity correction) {
+        return List.of(
+                new StudentAnswerEntity(correction.getId(), fixture.firstVersionQuestion().getId(),
+                        fixture.firstCorrectAlternative().getId(), "A", StudentAnswerStatus.DETECTED, true),
+                new StudentAnswerEntity(correction.getId(), fixture.secondVersionQuestion().getId(),
+                        null, null, StudentAnswerStatus.BLANK, null));
     }
 
     private DiscursiveFixture configureDiscursiveFixture() {

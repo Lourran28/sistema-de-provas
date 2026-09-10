@@ -16,6 +16,7 @@ export type Question = {
   statement: string;
   imageUrl: string | null;
   questionType: QuestionType;
+  responseLines: number;
   difficulty: QuestionDifficulty;
   sourceType: "MANUAL" | "AI";
   status: "ACTIVE" | "ARCHIVED";
@@ -30,6 +31,7 @@ export type QuestionInput = {
   statement: string;
   imageUrl?: string;
   questionType: QuestionType;
+  responseLines?: number;
   difficulty: QuestionDifficulty;
   alternatives: Array<{ text: string }>;
   correctAlternativeIndex: number | null;

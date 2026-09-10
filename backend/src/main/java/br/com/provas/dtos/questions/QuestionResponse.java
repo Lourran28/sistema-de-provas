@@ -22,6 +22,7 @@ public record QuestionResponse(
         QuestionSourceType sourceType,
         QuestionStatus status,
         List<AlternativeResponse> alternatives,
+        int responseLines,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -40,6 +41,7 @@ public record QuestionResponse(
                 question.getSourceType(),
                 question.getStatus(),
                 alternatives.stream().map(AlternativeResponse::from).toList(),
+                question.getResponseLines(),
                 question.getCreatedAt(),
                 question.getUpdatedAt());
     }

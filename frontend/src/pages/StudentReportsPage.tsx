@@ -1,16 +1,18 @@
-import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, BarChart3, CheckCircle2, Printer, School, Target, TrendingUp } from "lucide-react";
+import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, BarChart3, CheckCircle2, Printer, School, Target, Trash2, TrendingUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
+import { useConfirmation } from "../components/ui/confirmationContext";
 import { getClassPerformance, type ClassPerformance } from "../features/results/resultsMetrics";
-import { getCorrections } from "../services/correctionService";
+import { deleteClassData, getCorrections } from "../services/correctionService";
 import { ApiRequestError } from "../services/httpClient";
 import type { Correction } from "../types/corrections";
 
 export function StudentReportsPage() {
   const navigate = useNavigate();
+  const { confirm } = useConfirmation();
   const [corrections, setCorrections] = useState<Correction[]>([]);
   const [selectedClass, setSelectedClass] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -34,6 +36,18 @@ export function StudentReportsPage() {
   const best = reports[0] ?? null;
   const needsAttention = [...reports].filter((item) => item.confirmedCount > 0).sort((a, b) => a.averagePercentage - b.averagePercentage)[0] ?? null;
 
+  async function removeSelectedClass() {
+    if (!report || !(await confirm({ confirmLabel: "Excluir dados da turma", description: `Excluir aplicações e correções da turma ${report.classGroup}? Provas e questões serão preservadas.`, title: "Excluir turma", variant: "danger" }))) return;
+    setError("");
+    try {
+      await deleteClassData(report.classGroup);
+      setCorrections((current) => current.filter((item) => normalizeClass(item.classGroup) !== normalizeClass(report.classGroup)));
+      setSelectedClass("");
+    } catch (requestError) {
+      setError(requestError instanceof ApiRequestError ? requestError.message : "Não foi possível excluir os dados da turma.");
+    }
+  }
+
   return <div className="student-report-page space-y-7">
     <section className="student-report-toolbar flex flex-col gap-4 border-b border-stone-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
       <div><h1 className="text-2xl font-semibold text-slate-950">Visão geral das turmas</h1><p className="mt-1 text-sm text-slate-500">Veja quais turmas avançaram e onde o trabalho pedagógico precisa de mais atenção.</p></div>
@@ -46,7 +60,7 @@ export function StudentReportsPage() {
         <OverviewMetric icon={TrendingUp} label="Melhor desempenho" value={best ? `${best.classGroup} · ${formatPercent(best.averagePercentage)}%` : "-"} />
         <OverviewMetric icon={Target} label="Precisa de atenção" value={needsAttention ? `${needsAttention.classGroup} · ${formatPercent(needsAttention.averagePercentage)}%` : "-"} />
       </section>
-      <section className="student-report-toolbar border-y border-stone-200 py-5"><label className="block max-w-md text-sm font-medium text-slate-700">Turma<select className="mt-2 h-11 w-full border border-stone-300 bg-white px-3 font-normal outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" onChange={(event) => setSelectedClass(event.target.value)} value={report?.classGroup ?? ""}>{reports.map((item) => <option key={item.classGroup} value={item.classGroup}>{item.classGroup}</option>)}</select></label></section>
+      <section className="student-report-toolbar flex flex-col gap-3 border-y border-stone-200 py-5 sm:flex-row sm:items-end sm:justify-between"><label className="block w-full max-w-md text-sm font-medium text-slate-700">Turma<select className="mt-2 h-11 w-full border border-stone-300 bg-white px-3 font-normal outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" onChange={(event) => setSelectedClass(event.target.value)} value={report?.classGroup ?? ""}>{reports.map((item) => <option key={item.classGroup} value={item.classGroup}>{item.classGroup}</option>)}</select></label><Button icon={Trash2} onClick={() => void removeSelectedClass()} variant="danger">Excluir turma</Button></section>
       {report ? <ClassReportDocument report={report} rank={reports.findIndex((item) => item.classGroup === report.classGroup) + 1} totalClasses={reports.length} /> : null}
     </>}
   </div>;
@@ -67,3 +81,4 @@ function ReportMetric({ icon: Icon, label, value }: { icon: typeof School; label
 function formatDate(value: string) { return new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium" }).format(new Date(value)); }
 function formatPercent(value: number) { return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(value); }
 function formatScore(value: number) { return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(value); }
+function normalizeClass(value: string | null) { return (value?.trim() || "Turma não informada").normalize("NFD").replaceAll(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR"); }

@@ -14,5 +14,18 @@ public record ExamVersionQuestionResponse(
         String statement,
         String imageUrl,
         QuestionType questionType,
+        int responseLines,
         List<ExamVersionAlternativeResponse> alternatives) {
+
+    public ExamVersionQuestionResponse(
+            UUID id,
+            UUID originalQuestionId,
+            int position,
+            BigDecimal points,
+            String statement,
+            String imageUrl,
+            QuestionType questionType,
+            List<ExamVersionAlternativeResponse> alternatives) {
+        this(id, originalQuestionId, position, points, statement, imageUrl, questionType, 5, alternatives);
+    }
 }

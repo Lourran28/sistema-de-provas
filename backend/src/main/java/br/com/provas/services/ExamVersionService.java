@@ -198,7 +198,8 @@ public class ExamVersionService {
                         examQuestion.getId(),
                         question.getId(),
                         questionIndex + 1,
-                        question.getQuestionType());
+                        question.getQuestionType(),
+                        question.getResponseLines());
                 versionQuestions.add(versionQuestion);
 
                 List<AlternativeEntity> shuffledAlternatives = new ArrayList<>(alternativesByQuestionId.get(question.getId()));
@@ -420,6 +421,7 @@ public class ExamVersionService {
                 question.getStatement(),
                 question.getImageUrl(),
                 versionQuestion.getQuestionType(),
+                versionQuestion.getResponseLines(),
                 alternatives);
     }
 

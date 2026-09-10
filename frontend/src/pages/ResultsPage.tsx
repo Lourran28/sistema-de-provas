@@ -1,20 +1,25 @@
-import { ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, CheckCircle2, Download, Eye, School, TrendingUp } from "lucide-react";
+import { ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, CheckCircle2, Download, Eye, School, Trash2, TrendingUp } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
+import { useConfirmation } from "../components/ui/confirmationContext";
 import { allFilters, downloadClassPerformanceCsv, filterCorrections, getClassPerformance, getQuestionPerformance, summarizeCorrections, type ClassPerformance, type CorrectionFilters } from "../features/results/resultsMetrics";
-import { getCorrections } from "../services/correctionService";
+import { deleteClassData, deleteCorrection, getCorrections } from "../services/correctionService";
 import { ApiRequestError } from "../services/httpClient";
 import type { Correction } from "../types/corrections";
 
 export function ResultsPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { confirm } = useConfirmation();
   const [corrections, setCorrections] = useState<Correction[]>([]);
-  const [filters, setFilters] = useState<CorrectionFilters>(allFilters);
-  const [selectedClass, setSelectedClass] = useState("");
+  const initialClass = searchParams.get("turma") || "";
+  const [filters, setFilters] = useState<CorrectionFilters>(() => initialClass ? { ...allFilters, classGroup: initialClass } : allFilters);
+  const [selectedClass, setSelectedClass] = useState(initialClass);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -36,6 +41,36 @@ export function ResultsPage() {
   function updateFilter<Key extends keyof CorrectionFilters>(key: Key, value: CorrectionFilters[Key]) {
     setFilters((current) => ({ ...current, [key]: value }));
     setSelectedClass("");
+  }
+
+  async function removeCorrection(correction: Correction) {
+    if (!(await confirm({ confirmLabel: "Excluir resultado", description: `Excluir somente este resultado de ${correction.examTitle}? As demais correções da turma serão preservadas.`, title: "Excluir resultado", variant: "danger" }))) return;
+    setIsDeleting(true);
+    setError("");
+    try {
+      await deleteCorrection(correction.id);
+      setCorrections((current) => current.filter((item) => item.id !== correction.id));
+    } catch (requestError) {
+      setError(requestError instanceof ApiRequestError ? requestError.message : "Não foi possível excluir este resultado.");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  async function removeClass(classGroup: string) {
+    if (classGroup === "Turma não informada" || !(await confirm({ confirmLabel: "Excluir dados da turma", description: `Excluir aplicações e correções da turma ${classGroup}? Provas e questões continuarão disponíveis.`, title: "Excluir turma", variant: "danger" }))) return;
+    setIsDeleting(true);
+    setError("");
+    try {
+      await deleteClassData(classGroup);
+      setCorrections((current) => current.filter((item) => normalizeClass(item.classGroup) !== normalizeClass(classGroup)));
+      setSelectedClass("");
+      setFilters((current) => ({ ...current, classGroup: "ALL" }));
+    } catch (requestError) {
+      setError(requestError instanceof ApiRequestError ? requestError.message : "Não foi possível excluir os dados da turma.");
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   return (
@@ -64,7 +99,7 @@ export function ResultsPage() {
           {performance.length === 0 ? <p className="mt-5 border-y border-stone-200 py-8 text-sm text-slate-500">Ainda não há correções confirmadas neste filtro.</p> : <ClassComparison items={performance} onSelect={setSelectedClass} selectedClass={selected?.classGroup} />}
         </section>
 
-        {selected ? <ClassDetails item={selected} /> : null}
+        {selected ? <ClassDetails isDeleting={isDeleting} item={selected} onDeleteClass={() => void removeClass(selected.classGroup)} onDeleteCorrection={(correction) => void removeCorrection(correction)} /> : null}
         {filters.versionId !== "ALL" ? <QuestionTable rows={questionPerformance} /> : null}
       </>}
     </div>
@@ -96,8 +131,8 @@ function Trend({ item }: { item: ClassPerformance }) {
   return <span className={`inline-flex items-center gap-1 font-semibold ${color}`}><Icon aria-hidden="true" size={17} />{label}</span>;
 }
 
-function ClassDetails({ item }: { item: ClassPerformance }) {
-  return <section className="border-y border-stone-200 py-6"><div><p className="text-xs font-semibold uppercase text-teal-800">Turma selecionada</p><h2 className="mt-1 text-xl font-semibold text-slate-950">{item.classGroup}</h2></div><div className="mt-5 grid gap-3 sm:grid-cols-3"><SmallMetric label="Acertos" value={String(item.correctCount)} /><SmallMetric label="Erros" value={String(item.wrongCount)} /><SmallMetric label="Em branco" value={String(item.blankCount)} /></div><div className="mt-6 grid gap-3 md:hidden">{item.corrections.map((correction) => <article className="border border-stone-200 bg-white p-4" key={correction.id}><div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold text-slate-950">{correction.examTitle}</h3><p className="mt-1 text-sm text-slate-500">{formatDate(correction.reviewedAt || correction.createdAt)} · Versão {correction.versionLabel}</p></div><strong className="text-teal-800">{formatPercent(correction.totalScore ? correction.score / correction.totalScore * 100 : 0)}%</strong></div><p className="mt-3 text-sm text-slate-600">Nota <strong className="text-slate-950">{formatScore(correction.score)} / {formatScore(correction.totalScore)}</strong></p></article>)}</div><div className="mt-6 hidden overflow-x-auto border border-stone-200 bg-white md:block"><table className="min-w-full text-left text-sm"><thead className="border-b border-stone-200 bg-stone-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Data</th><th className="px-4 py-3">Prova</th><th className="px-4 py-3">Versão</th><th className="px-4 py-3">Nota</th><th className="px-4 py-3">Aproveitamento</th></tr></thead><tbody>{item.corrections.map((correction) => <tr className="border-b border-stone-100 last:border-0" key={correction.id}><td className="px-4 py-3 text-slate-600">{formatDate(correction.reviewedAt || correction.createdAt)}</td><td className="px-4 py-3 font-medium text-slate-950">{correction.examTitle}</td><td className="px-4 py-3 text-slate-700">{correction.versionLabel}</td><td className="px-4 py-3 font-semibold text-slate-950">{formatScore(correction.score)} / {formatScore(correction.totalScore)}</td><td className="px-4 py-3 font-semibold text-teal-800">{formatPercent(correction.totalScore ? correction.score / correction.totalScore * 100 : 0)}%</td></tr>)}</tbody></table></div></section>;
+function ClassDetails({ isDeleting, item, onDeleteClass, onDeleteCorrection }: { isDeleting: boolean; item: ClassPerformance; onDeleteClass: () => void; onDeleteCorrection: (correction: Correction) => void }) {
+  return <section className="border-y border-stone-200 py-6"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-semibold uppercase text-teal-800">Turma selecionada</p><h2 className="mt-1 text-xl font-semibold text-slate-950">{item.classGroup}</h2></div>{item.classGroup !== "Turma não informada" ? <Button disabled={isDeleting} icon={Trash2} onClick={onDeleteClass} variant="danger">Excluir turma</Button> : null}</div><div className="mt-5 grid gap-3 sm:grid-cols-3"><SmallMetric label="Acertos" value={String(item.correctCount)} /><SmallMetric label="Erros" value={String(item.wrongCount)} /><SmallMetric label="Em branco" value={String(item.blankCount)} /></div><div className="mt-6 grid gap-3 md:hidden">{item.corrections.map((correction) => <article className="border border-stone-200 bg-white p-4" key={correction.id}><div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold text-slate-950">{correction.examTitle}</h3><p className="mt-1 text-sm text-slate-500">{formatDate(correction.reviewedAt || correction.createdAt)} · Versão {correction.versionLabel}</p></div><div className="flex items-center gap-2"><strong className="text-teal-800">{formatPercent(correction.totalScore ? correction.score / correction.totalScore * 100 : 0)}%</strong><Button aria-label="Excluir resultado" className="h-9 w-9 px-0 text-rose-700" disabled={isDeleting} icon={Trash2} onClick={() => onDeleteCorrection(correction)} title="Excluir resultado" variant="ghost" /></div></div><p className="mt-3 text-sm text-slate-600">Nota <strong className="text-slate-950">{formatScore(correction.score)} / {formatScore(correction.totalScore)}</strong></p></article>)}</div><div className="mt-6 hidden overflow-x-auto border border-stone-200 bg-white md:block"><table className="min-w-full text-left text-sm"><thead className="border-b border-stone-200 bg-stone-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Data</th><th className="px-4 py-3">Prova</th><th className="px-4 py-3">Versão</th><th className="px-4 py-3">Nota</th><th className="px-4 py-3">Aproveitamento</th><th className="px-4 py-3"><span className="sr-only">Ações</span></th></tr></thead><tbody>{item.corrections.map((correction) => <tr className="border-b border-stone-100 last:border-0" key={correction.id}><td className="px-4 py-3 text-slate-600">{formatDate(correction.reviewedAt || correction.createdAt)}</td><td className="px-4 py-3 font-medium text-slate-950">{correction.examTitle}</td><td className="px-4 py-3 text-slate-700">{correction.versionLabel}</td><td className="px-4 py-3 font-semibold text-slate-950">{formatScore(correction.score)} / {formatScore(correction.totalScore)}</td><td className="px-4 py-3 font-semibold text-teal-800">{formatPercent(correction.totalScore ? correction.score / correction.totalScore * 100 : 0)}%</td><td className="px-4 py-3 text-right"><Button aria-label="Excluir resultado" className="h-9 w-9 px-0 text-rose-700" disabled={isDeleting} icon={Trash2} onClick={() => onDeleteCorrection(correction)} title="Excluir resultado" variant="ghost" /></td></tr>)}</tbody></table></div></section>;
 }
 
 function SmallMetric({ label, value }: { label: string; value: string }) { return <div className="border border-stone-200 bg-white px-4 py-3"><p className="text-sm text-slate-500">{label}</p><p className="mt-2 text-xl font-semibold text-slate-950">{value}</p></div>; }
@@ -108,3 +143,4 @@ function uniqueBy<T, Key>(items: T[], key: (item: T) => Key) { return [...new Ma
 function formatScore(value: number) { return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(value); }
 function formatPercent(value: number) { return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(value); }
 function formatDate(value: string) { return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" }).format(new Date(value)); }
+function normalizeClass(value: string | null) { return (value?.trim() || "Turma não informada").normalize("NFD").replaceAll(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR"); }

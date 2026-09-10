@@ -118,7 +118,7 @@ public class ExamVersionExportService {
                             40);
                 }
                 if (question.questionType() == QuestionType.DISCURSIVE) {
-                    for (int line = 0; line < 5; line++) {
+                    for (int line = 0; line < question.responseLines(); line++) {
                         addDocxParagraph(document, "________________________________________________________________________________", 10, false, 0, 80);
                     }
                 }
@@ -147,6 +147,7 @@ public class ExamVersionExportService {
             }
 
             for (ExamVersionQuestionResponse question : payload.version().questions()) {
+                writer.ensureBlock(question.questionType() == QuestionType.DISCURSIVE ? 88 : 76);
                 writer.paragraph("%d. (%s ponto%s) %s".formatted(
                         question.position(),
                         formatScore(question.points()),
@@ -157,11 +158,11 @@ public class ExamVersionExportService {
                     writer.paragraph("%s) %s".formatted(letterFor(alternative.position()), alternative.text()), false, 9, 13, 16, 2);
                 }
                 if (question.questionType() == QuestionType.DISCURSIVE) {
-                    for (int line = 0; line < 5; line++) {
+                    for (int line = 0; line < question.responseLines(); line++) {
                         writer.paragraph("________________________________________________________________________________", false, 8, 13, 0, 1);
                     }
                 }
-                writer.space(8);
+                writer.divider();
             }
 
             writer.close();
@@ -408,6 +409,25 @@ public class ExamVersionExportService {
                 } catch (IOException exception) {
                     throw new IllegalStateException("Não foi possível criar outra página do PDF.", exception);
                 }
+            }
+        }
+
+        private void ensureBlock(float height) {
+            ensureSpace(height);
+        }
+
+        private void divider() {
+            ensureSpace(14);
+            try {
+                stream.setStrokingColor(203 / 255f, 213 / 255f, 225 / 255f);
+                stream.setLineWidth(0.5f);
+                stream.moveTo(MARGIN, cursorY - 4);
+                stream.lineTo(PDRectangle.A4.getWidth() - MARGIN, cursorY - 4);
+                stream.stroke();
+                stream.setStrokingColor(0f, 0f, 0f);
+                cursorY -= 14;
+            } catch (IOException exception) {
+                throw new IllegalStateException("Não foi possível organizar o PDF da prova.", exception);
             }
         }
 

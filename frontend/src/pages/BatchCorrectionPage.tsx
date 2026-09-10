@@ -1,15 +1,15 @@
-import { ArrowLeft, CheckCircle2, Files, ImageUp, RefreshCw, Save, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, CheckCircle2, Files, ImageUp, ListChecks, RefreshCw, Save, School, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { useConfirmation } from "../components/ui/confirmationContext";
 import { scanAnswerCard, type AnswerCardScanResult } from "../features/corrections/answerCardScanner";
-import { createCorrection } from "../services/correctionService";
+import { createCorrection, getCorrections } from "../services/correctionService";
 import { getExamVersions } from "../services/examService";
 import { ApiRequestError } from "../services/httpClient";
-import type { CorrectionInput } from "../types/corrections";
+import type { Correction, CorrectionInput } from "../types/corrections";
 import type { ExamVersion } from "../types/exams";
 
 const MAX_BATCH_FILES = 30;
@@ -20,6 +20,7 @@ export function BatchCorrectionPage() {
   const navigate = useNavigate();
   const { confirm } = useConfirmation();
   const [versions, setVersions] = useState<ExamVersion[]>([]);
+  const [corrections, setCorrections] = useState<Correction[]>([]);
   const [selectedVersion, setSelectedVersion] = useState<ExamVersion | null>(null);
   const [classGroup, setClassGroup] = useState("");
   const [items, setItems] = useState<BatchItem[]>([]);
@@ -31,7 +32,7 @@ export function BatchCorrectionPage() {
 
   useEffect(() => {
     let active = true;
-    getExamVersions().then((data) => { if (active) setVersions(data); })
+    Promise.all([getExamVersions(), getCorrections()]).then(([versionData, correctionData]) => { if (active) { setVersions(versionData); setCorrections(correctionData); } })
       .catch((requestError: unknown) => { if (active) setError(getErrorMessage(requestError, "Não foi possível carregar as versões.")); })
       .finally(() => { if (active) setIsLoading(false); });
     return () => { active = false; };
@@ -40,6 +41,8 @@ export function BatchCorrectionPage() {
   const readyItems = items.filter((item) => item.status === "READY" || item.status === "SAVE_ERROR");
   const savedCount = items.filter((item) => item.status === "SAVED").length;
   const reviewCount = items.reduce((total, item) => total + (item.scan?.reviewCount ?? 0), 0);
+  const versionGroups = useMemo(() => groupVersions(versions), [versions]);
+  const pendingGroups = useMemo(() => groupPendingCorrections(corrections), [corrections]);
 
   async function selectVersion(versionId: string) {
     const version = versions.find((item) => item.id === versionId) ?? null;
@@ -94,7 +97,8 @@ export function BatchCorrectionPage() {
       if (!item.scan) continue;
       setItems((current) => updateItem(current, item.id, { error: undefined, status: "SAVING" }));
       try {
-        await createCorrection(buildCorrectionRequest(selectedVersion, classGroup.trim(), item.scan));
+        const correction = await createCorrection(buildCorrectionRequest(selectedVersion, classGroup.trim(), item.scan));
+        setCorrections((current) => [...current.filter((candidate) => candidate.id !== correction.id), correction]);
         saved += 1;
         setItems((current) => updateItem(current, item.id, { status: "SAVED" }));
       } catch (requestError) {
@@ -116,11 +120,22 @@ export function BatchCorrectionPage() {
       {error ? <div aria-live="polite" className="border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">{error}</div> : null}
       {notice ? <div aria-live="polite" className="border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-900" role="status">{notice}</div> : null}
 
+      {pendingGroups.length > 0 ? <section aria-labelledby="pending-batches-title" className="space-y-4 border-y border-stone-200 py-6">
+        <div><h2 className="text-lg font-semibold text-slate-950" id="pending-batches-title">Turmas em correção</h2><p className="mt-1 text-sm text-slate-500">Cada lote fica separado por turma, prova e versão até a finalização.</p></div>
+        <div className="grid gap-3 lg:grid-cols-2">
+          {pendingGroups.map((group) => <article className="border border-stone-200 bg-white p-4 shadow-panel" key={group.key}>
+            <div className="flex items-start justify-between gap-4"><div><div className="flex items-center gap-2 text-sm font-semibold text-teal-800"><School aria-hidden="true" size={17} />{group.classGroup}</div><h3 className="mt-2 font-semibold text-slate-950">{group.examTitle} · Versão {group.versionLabel}</h3><p className="mt-1 text-sm text-slate-500">{group.count} {group.count === 1 ? "cartão" : "cartões"} aguardando revisão</p></div><ListChecks aria-hidden="true" className="shrink-0 text-amber-700" size={20} /></div>
+            <Button className="mt-4" onClick={() => navigate(`/revisar-correcoes?turma=${encodeURIComponent(group.classGroup)}&versao=${group.examVersionId}`)} variant="secondary">Revisar este lote</Button>
+          </article>)}
+        </div>
+      </section> : null}
+
+      <section><h2 className="text-lg font-semibold text-slate-950">Novo lote de cartões</h2><p className="mt-1 text-sm text-slate-500">Selecione uma versão e informe a turma antes de adicionar as fotos.</p></section>
       <section className="grid gap-5 border-y border-stone-200 py-6 lg:grid-cols-2">
         <label className="block text-sm font-medium text-slate-700" htmlFor="batch-version">Versão oficial
           <select className="mt-2 h-11 w-full border border-stone-300 bg-white px-3 font-normal text-slate-900 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" disabled={isLoading || isScanning || isSaving} id="batch-version" onChange={(event) => void selectVersion(event.target.value)} value={selectedVersion?.id ?? ""}>
             <option value="">{isLoading ? "Carregando versões..." : "Selecione uma versão"}</option>
-            {versions.map((version) => <option key={version.id} value={version.id}>{version.examTitle} · Versão {version.label}</option>)}
+            {versionGroups.map((group) => <optgroup key={group.key} label={group.label}>{group.versions.map((version) => <option key={version.id} value={version.id}>Versão {version.label}</option>)}</optgroup>)}
           </select>
         </label>
         <label className="block text-sm font-medium text-slate-700" htmlFor="batch-class">Turma
@@ -136,7 +151,7 @@ export function BatchCorrectionPage() {
         {items.length === 0 ? <Card className="px-6 py-12 text-center"><Files aria-hidden="true" className="mx-auto text-teal-800" size={26} /><h2 className="mt-4 text-lg font-semibold text-slate-950">Nenhum cartão neste lote</h2><p className="mt-2 text-sm text-slate-500">Informe a turma e adicione as fotos dos cartões-resposta.</p></Card> : <>
           <section className="grid gap-3 sm:grid-cols-3"><BatchMetric label="Cartões no lote" value={String(items.length)} /><BatchMetric label="Marcações para revisar" tone="amber" value={String(reviewCount)} /><BatchMetric label="Enviados para revisão" tone="emerald" value={String(savedCount)} /></section>
           <section className="divide-y divide-stone-200 border border-stone-200 bg-white shadow-panel">{items.map((item) => <BatchItemRow item={item} key={item.id} onRemove={() => setItems((current) => current.filter((candidate) => candidate.id !== item.id))} onRetry={() => void scanItems([item], selectedVersion)} />)}</section>
-          <section className="flex flex-col gap-4 border-t border-stone-200 pt-6 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-500">As notas entram no desempenho da turma depois da confirmação.</p><div className="flex flex-col gap-2 sm:flex-row">{savedCount > 0 ? <Button onClick={() => navigate("/revisar-correcoes")} variant="secondary">Abrir revisões</Button> : null}<Button disabled={isScanning || isSaving || readyItems.length === 0} icon={Save} onClick={() => void saveBatch()}>{isSaving ? "Salvando lote..." : `Enviar ${readyItems.length} para revisão`}</Button></div></section>
+          <section className="flex flex-col gap-4 border-t border-stone-200 pt-6 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-500">As notas entram no desempenho da turma depois da confirmação.</p><div className="flex flex-col gap-2 sm:flex-row">{savedCount > 0 ? <Button onClick={() => navigate(`/revisar-correcoes?turma=${encodeURIComponent(classGroup.trim())}&versao=${selectedVersion.id}`)} variant="secondary">Abrir revisões deste lote</Button> : null}<Button disabled={isScanning || isSaving || readyItems.length === 0} icon={Save} onClick={() => void saveBatch()}>{isSaving ? "Salvando lote..." : `Enviar ${readyItems.length} para revisão`}</Button></div></section>
         </>}
       </> : null}
     </div>
@@ -159,4 +174,20 @@ function buildCorrectionRequest(version: ExamVersion, classGroup: string, scan: 
 }
 function batchStatus(status: BatchItemStatus) { return { ERROR: { className: "text-rose-700", label: "Leitura não concluída" }, QUEUED: { className: "text-slate-600", label: "Aguardando leitura" }, READY: { className: "text-teal-800", label: "Pronto para revisão" }, SAVED: { className: "text-emerald-700", label: "Enviado para revisão" }, SAVING: { className: "text-teal-800", label: "Salvando correção..." }, SAVE_ERROR: { className: "text-rose-700", label: "Não foi possível salvar" }, SCANNING: { className: "text-teal-800", label: "Analisando bolhas..." } }[status]; }
 function formatFileSize(bytes: number) { return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(bytes / 1_000_000) + " MB"; }
+function groupVersions(versions: ExamVersion[]) {
+  const groups = new Map<string, ExamVersion[]>();
+  for (const version of versions) groups.set(version.examId, [...(groups.get(version.examId) ?? []), version]);
+  return [...groups.entries()].map(([key, groupedVersions]) => ({ key, label: `${groupedVersions[0].examTitle} · gerada em ${formatDate(groupedVersions[0].generatedAt)}`, versions: groupedVersions.sort((a, b) => a.label.localeCompare(b.label)) }));
+}
+function groupPendingCorrections(corrections: Correction[]) {
+  const groups = new Map<string, { classGroup: string; count: number; examTitle: string; examVersionId: string; key: string; versionLabel: string }>();
+  for (const correction of corrections.filter((item) => item.status === "NEEDS_REVIEW")) {
+    const classGroup = correction.classGroup?.trim() || "Sem turma";
+    const key = `${correction.examVersionId}:${classGroup.toLocaleLowerCase("pt-BR")}`;
+    const current = groups.get(key);
+    groups.set(key, current ? { ...current, count: current.count + 1 } : { classGroup, count: 1, examTitle: correction.examTitle, examVersionId: correction.examVersionId, key, versionLabel: correction.versionLabel });
+  }
+  return [...groups.values()].sort((a, b) => a.classGroup.localeCompare(b.classGroup, "pt-BR") || a.examTitle.localeCompare(b.examTitle, "pt-BR"));
+}
+function formatDate(value: string) { return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" }).format(new Date(value)); }
 function getErrorMessage(error: unknown, fallback: string) { return error instanceof ApiRequestError ? error.message : fallback; }

@@ -1,12 +1,12 @@
-import { ArrowLeft, CheckCircle2, FileWarning, ListChecks, Save, Search } from "lucide-react";
+import { ArrowLeft, CheckCheck, CheckCircle2, FileWarning, ListChecks, Save, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { useConfirmation } from "../components/ui/confirmationContext";
 import { MathText } from "../components/ui/MathText";
-import { confirmCorrection, getCorrections, updateCorrection } from "../services/correctionService";
+import { confirmCorrection, confirmCorrectionBatch, getCorrections, updateCorrection } from "../services/correctionService";
 import { getExamVersions } from "../services/examService";
 import { ApiRequestError } from "../services/httpClient";
 import type { Correction, CorrectionInput, StudentAnswerStatus } from "../types/corrections";
@@ -20,14 +20,15 @@ type DraftAnswer = {
 
 export function CorrectionReviewPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { confirm } = useConfirmation();
   const [corrections, setCorrections] = useState<Correction[]>([]);
   const [versions, setVersions] = useState<ExamVersion[]>([]);
   const [selectedCorrectionId, setSelectedCorrectionId] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ answers: Record<string, DraftAnswer>; correctionId: string } | null>(null);
   const [query, setQuery] = useState("");
-  const [versionFilter, setVersionFilter] = useState("ALL");
-  const [classFilter, setClassFilter] = useState("ALL");
+  const [versionFilter, setVersionFilter] = useState(() => searchParams.get("versao") || "ALL");
+  const [classFilter, setClassFilter] = useState(() => searchParams.get("turma") || "ALL");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
@@ -81,6 +82,9 @@ export function CorrectionReviewPage() {
   }, [classFilter, pendingCorrections, query, versionFilter]);
   const selectedCorrection = visibleCorrections.find((correction) => correction.id === selectedCorrectionId) ?? visibleCorrections[0] ?? null;
   const selectedVersion = versions.find((version) => version.id === selectedCorrection?.examVersionId) ?? null;
+  const selectedGroup = useMemo(() => selectedCorrection ? pendingCorrections.filter((correction) => correction.examVersionId === selectedCorrection.examVersionId && normalizeClass(correction.classGroup) === normalizeClass(selectedCorrection.classGroup)) : [], [pendingCorrections, selectedCorrection]);
+  const selectedGroupReady = selectedVersion !== null && selectedGroup.length > 0
+    && selectedGroup.every((correction) => correction.answers.length === selectedVersion.questions.length && isCorrectionReady(correction));
   const answers = useMemo(
     () => selectedCorrection && draft?.correctionId === selectedCorrection.id ? draft.answers : answersForCorrection(selectedCorrection),
     [draft, selectedCorrection]
@@ -171,7 +175,7 @@ export function CorrectionReviewPage() {
   }
 
   async function confirmSelectedCorrection() {
-    if (!selectedCorrection || hasUnsavedChanges) {
+    if (!selectedCorrection || !selectedVersion || hasUnsavedChanges || !areDraftAnswersReady(selectedCorrection, selectedVersion, answers)) {
       return;
     }
     if (!(await confirm({
@@ -192,6 +196,30 @@ export function CorrectionReviewPage() {
       setNotice(`A correção da turma ${confirmed.classGroup || "não informada"} foi confirmada.`);
     } catch (requestError) {
       setError(getErrorMessage(requestError, "Não foi possível confirmar a correção."));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function confirmSelectedGroup() {
+    if (!selectedCorrection || hasUnsavedChanges || !selectedGroupReady) {
+      setError(hasUnsavedChanges ? "Salve os ajustes atuais antes de finalizar a turma." : "Revise todas as marcações ambíguas e dê nota às questões abertas antes de finalizar a turma.");
+      return;
+    }
+    const classGroup = selectedCorrection.classGroup?.trim() || "Sem turma";
+    if (!(await confirm({
+      confirmLabel: `Finalizar ${selectedGroup.length} correções`,
+      description: `Todas as correções de ${classGroup} nesta prova serão confirmadas e passarão a compor o desempenho da turma.`,
+      title: "Finalizar correções da turma"
+    }))) return;
+    setIsSaving(true);
+    setError("");
+    try {
+      await confirmCorrectionBatch(selectedCorrection.examVersionId, classGroup);
+      setCorrections((current) => current.map((correction) => selectedGroup.some((item) => item.id === correction.id) ? { ...correction, status: "CONFIRMED" as const } : correction));
+      navigate(`/resultados?turma=${encodeURIComponent(classGroup)}`);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "Não foi possível finalizar as correções desta turma."));
     } finally {
       setIsSaving(false);
     }
@@ -252,7 +280,10 @@ export function CorrectionReviewPage() {
                   correction={selectedCorrection}
                   hasUnsavedChanges={hasUnsavedChanges}
                   isSaving={isSaving}
+                  groupCount={selectedGroup.length}
+                  groupReady={selectedGroupReady}
                   onConfirm={() => void confirmSelectedCorrection()}
+                  onConfirmGroup={() => void confirmSelectedGroup()}
                   onSave={() => void saveChanges()}
                   onUpdateOpenScore={updateOpenScore}
                   onUpdateAnswer={updateAnswer}
@@ -270,23 +301,26 @@ export function CorrectionReviewPage() {
 }
 
 function CorrectionQueue({ corrections, onSelect, selectedCorrectionId }: { corrections: Correction[]; onSelect: (correctionId: string) => void; selectedCorrectionId: string | null }) {
+  const groups = groupCorrectionQueue(corrections);
   return (
     <aside className="border border-stone-200 bg-white shadow-panel">
       <div className="border-b border-stone-200 px-4 py-4">
         <div className="flex items-center gap-2"><ListChecks aria-hidden="true" className="text-amber-700" size={18} /><h2 className="text-base font-semibold text-slate-950">Fila de revisão</h2></div>
         <p className="mt-1 text-sm text-slate-500">{corrections.length} correção{corrections.length === 1 ? "" : "ões"} aguardando confirmação.</p>
       </div>
-      <ol className="max-h-[34rem] divide-y divide-stone-200 overflow-auto">
-        {corrections.map((correction, index) => (
-          <li key={correction.id}>
-            <button className={correction.id === selectedCorrectionId ? "w-full border-l-4 border-teal-700 bg-teal-50 px-4 py-4 text-left" : "w-full border-l-4 border-transparent px-4 py-4 text-left hover:bg-stone-50"} onClick={() => onSelect(correction.id)} type="button">
-              <span className="block truncate text-sm font-semibold text-slate-950">{correction.classGroup || "Turma não informada"}</span>
-              <span className="mt-1 block truncate text-xs text-slate-500">{correction.examTitle} · Cartão {index + 1}</span>
-              <span className="mt-2 block text-sm font-semibold text-amber-800">{formatScore(correction.score)} / {formatScore(correction.totalScore)} · revisar</span>
-            </button>
-          </li>
-        ))}
-      </ol>
+      <div className="max-h-[34rem] overflow-auto">
+        {groups.map((group) => <section className="border-b border-stone-200 last:border-0" key={group.key}>
+          <header className="bg-stone-50 px-4 py-3"><p className="text-sm font-semibold text-slate-950">{group.classGroup}</p><p className="mt-0.5 truncate text-xs text-slate-500">{group.examTitle} · Versão {group.versionLabel} · {group.corrections.length} cartões</p></header>
+          <ol className="divide-y divide-stone-100">
+            {group.corrections.map((correction, index) => <li key={correction.id}>
+              <button className={correction.id === selectedCorrectionId ? "w-full border-l-4 border-teal-700 bg-teal-50 px-4 py-3 text-left" : "w-full border-l-4 border-transparent px-4 py-3 text-left hover:bg-stone-50"} onClick={() => onSelect(correction.id)} type="button">
+                <span className="block text-sm font-semibold text-slate-950">Cartão {index + 1}</span>
+                <span className="mt-1 block text-sm font-semibold text-amber-800">{formatScore(correction.score)} / {formatScore(correction.totalScore)} · revisar</span>
+              </button>
+            </li>)}
+          </ol>
+        </section>)}
+      </div>
     </aside>
   );
 }
@@ -295,20 +329,28 @@ type ReviewEditorProps = {
   answers: Record<string, DraftAnswer>;
   correction: Correction;
   hasUnsavedChanges: boolean;
+  groupCount: number;
+  groupReady: boolean;
   isSaving: boolean;
   onConfirm: () => void;
+  onConfirmGroup: () => void;
   onSave: () => void;
   onUpdateOpenScore: (questionId: string, value: string) => void;
   onUpdateAnswer: (questionId: string, selectedAlternativeId: string | null, status: DraftAnswer["status"]) => void;
   version: ExamVersion;
 };
 
-function ReviewEditor({ answers, correction, hasUnsavedChanges, isSaving, onConfirm, onSave, onUpdateAnswer, onUpdateOpenScore, version }: ReviewEditorProps) {
+function ReviewEditor({ answers, correction, groupCount, groupReady, hasUnsavedChanges, isSaving, onConfirm, onConfirmGroup, onSave, onUpdateAnswer, onUpdateOpenScore, version }: ReviewEditorProps) {
   const hasPendingOpenScore = version.questions.some((question) => (
     question.questionType === "DISCURSIVE"
     && (answers[question.id]?.awardedPoints ?? null) === null
     && !correction.answers.find((answer) => answer.examVersionQuestionId === question.id)?.cancelled
   ));
+  const hasPendingObjective = version.questions.some((question) => {
+    const answer = answers[question.id];
+    return question.questionType !== "DISCURSIVE" && (answer?.status === "NEEDS_REVIEW" || answer?.status === "AMBIGUOUS");
+  });
+  const hasPendingAnswer = hasPendingOpenScore || hasPendingObjective;
   return (
     <section className="min-w-0">
       <div className="flex flex-col gap-3 border-b border-stone-200 pb-5 sm:flex-row sm:items-start sm:justify-between">
@@ -366,10 +408,11 @@ function ReviewEditor({ answers, correction, hasUnsavedChanges, isSaving, onConf
       </div>
 
       <section className="mt-6 flex flex-col gap-3 border-t border-stone-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
-        <p className={hasUnsavedChanges || hasPendingOpenScore ? "text-sm font-medium text-amber-800" : "text-sm text-slate-500"}>{hasUnsavedChanges ? "Existem ajustes que precisam ser salvos antes da confirmação." : hasPendingOpenScore ? "Informe a nota de todas as questões abertas." : "A nota está revisada e pode ser confirmada."}</p>
+        <p className={hasUnsavedChanges || hasPendingAnswer ? "text-sm font-medium text-amber-800" : "text-sm text-slate-500"}>{hasUnsavedChanges ? "Existem ajustes que precisam ser salvos antes da confirmação." : hasPendingOpenScore ? "Informe a nota de todas as questões abertas." : hasPendingObjective ? "Resolva todas as marcações indicadas para revisão." : "A nota está revisada e pode ser confirmada."}</p>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button disabled={!hasUnsavedChanges || isSaving} icon={Save} onClick={onSave} variant="secondary">{isSaving ? "Salvando..." : "Salvar ajustes"}</Button>
-          <Button disabled={hasUnsavedChanges || hasPendingOpenScore || isSaving} icon={CheckCircle2} onClick={onConfirm}>{isSaving ? "Confirmando..." : "Confirmar correção"}</Button>
+          <Button disabled={hasUnsavedChanges || hasPendingAnswer || isSaving} icon={CheckCircle2} onClick={onConfirm}>{isSaving ? "Confirmando..." : "Confirmar cartão"}</Button>
+          <Button disabled={hasUnsavedChanges || !groupReady || isSaving} icon={CheckCheck} onClick={onConfirmGroup} title={!groupReady ? "Revise todos os cartões deste lote antes de finalizar" : undefined}>{isSaving ? "Finalizando..." : `Finalizar turma (${groupCount})`}</Button>
         </div>
       </section>
     </section>
@@ -382,6 +425,39 @@ function uniqueBy<T, Key>(items: T[], key: (item: T) => Key) {
     unique.set(key(item), item);
   }
   return [...unique.values()];
+}
+
+function groupCorrectionQueue(corrections: Correction[]) {
+  const groups = new Map<string, { classGroup: string; corrections: Correction[]; examTitle: string; key: string; versionLabel: string }>();
+  for (const correction of corrections) {
+    const classGroup = correction.classGroup?.trim() || "Sem turma";
+    const key = `${correction.examVersionId}:${normalizeSearch(classGroup)}`;
+    const current = groups.get(key);
+    if (current) current.corrections.push(correction);
+    else groups.set(key, { classGroup, corrections: [correction], examTitle: correction.examTitle, key, versionLabel: correction.versionLabel });
+  }
+  return [...groups.values()];
+}
+
+function normalizeClass(value: string | null) {
+  return normalizeSearch(value?.trim() || "Sem turma");
+}
+
+function isCorrectionReady(correction: Correction) {
+  return correction.answers.every((answer) => answer.cancelled || (answer.questionType === "DISCURSIVE"
+    ? answer.awardedPoints !== null
+    : answer.status !== "NEEDS_REVIEW" && answer.status !== "AMBIGUOUS"));
+}
+
+function areDraftAnswersReady(correction: Correction, version: ExamVersion, answers: Record<string, DraftAnswer>) {
+  return version.questions.every((question) => {
+    if (correction.answers.find((answer) => answer.examVersionQuestionId === question.id)?.cancelled) return true;
+    const answer = answers[question.id];
+    if (!answer) return false;
+    return question.questionType === "DISCURSIVE"
+      ? (answer?.awardedPoints ?? null) !== null
+      : answer?.status !== "NEEDS_REVIEW" && answer?.status !== "AMBIGUOUS";
+  });
 }
 
 function normalizeSearch(value: string) {
