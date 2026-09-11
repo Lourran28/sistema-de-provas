@@ -1,5 +1,6 @@
 const API_URL = normalizeApiUrl(import.meta.env.VITE_API_URL ?? "http://localhost:8080/api");
 const ACCESS_TOKEN_STORAGE_KEY = "provas.access-token";
+export const AUTH_SESSION_EXPIRED_EVENT = "provas:auth-session-expired";
 
 type ApiErrorPayload = {
   message?: string;
@@ -53,6 +54,9 @@ export async function apiRequest<TResponse>(path: string, options: ApiRequestOpt
 
   const response = await fetch(`${API_URL}${path}`, { ...init, headers });
   if (!response.ok) {
+    if (response.status === 401 && !anonymous) {
+      expireSession(accessToken);
+    }
     const error = await readApiError(response);
     throw new ApiRequestError(response.status, error.message, error.fieldErrors);
   }
@@ -96,6 +100,9 @@ export async function apiDownload(path: string, fallbackFilename: string) {
 
   const response = await fetch(`${API_URL}${path}`, { headers });
   if (!response.ok) {
+    if (response.status === 401) {
+      expireSession(accessToken);
+    }
     const error = await readApiError(response);
     throw new ApiRequestError(response.status, error.message, error.fieldErrors);
   }
@@ -109,6 +116,15 @@ export async function apiDownload(path: string, fallbackFilename: string) {
   link.click();
   link.remove();
   URL.revokeObjectURL(objectUrl);
+}
+
+function expireSession(failedToken: string | null) {
+  if (!failedToken || getAccessToken() !== failedToken) {
+    return;
+  }
+
+  clearAccessToken();
+  window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT));
 }
 
 async function readApiError(response: Response): Promise<Required<ApiErrorPayload>> {

@@ -4,6 +4,7 @@ import type { AuthenticatedUser, LoginCredentials, ProfileUpdateInput, Registrat
 
 export type AuthContextValue = {
   isReady: boolean;
+  sessionExpired: boolean;
   signIn: (credentials: LoginCredentials) => Promise<void>;
   signInDemo: () => Promise<void>;
   signOut: () => void;

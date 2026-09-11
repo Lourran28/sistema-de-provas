@@ -5,7 +5,7 @@ import { SlowServerNotice } from "./SlowServerNotice";
 import { useAuth } from "./useAuth";
 
 export function ProtectedRoute() {
-  const { isReady, user } = useAuth();
+  const { isReady, sessionExpired, user } = useAuth();
   const location = useLocation();
 
   if (!isReady) {
@@ -13,7 +13,7 @@ export function ProtectedRoute() {
   }
 
   if (!user) {
-    return <Navigate replace state={{ from: location }} to="/login" />;
+    return <Navigate replace state={{ from: location, sessionExpired }} to="/login" />;
   }
 
   return <Outlet />;

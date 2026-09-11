@@ -11,6 +11,7 @@ import { ApiRequestError } from "../services/httpClient";
 type LocationState = {
   from?: { pathname?: string };
   passwordChanged?: boolean;
+  sessionExpired?: boolean;
 };
 
 export function LoginPage() {
@@ -74,6 +75,11 @@ export function LoginPage() {
           {(location.state as LocationState | null)?.passwordChanged ? (
             <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800" role="status">
               Senha alterada. Entre novamente com sua nova senha.
+            </div>
+          ) : null}
+          {(location.state as LocationState | null)?.sessionExpired ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
+              Sua sessão expirou. Entre novamente para continuar de onde parou.
             </div>
           ) : null}
           {error ? (
