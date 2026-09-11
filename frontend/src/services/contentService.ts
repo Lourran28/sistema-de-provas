@@ -6,6 +6,7 @@ export function getContents(filters: ContentFilters = {}) {
   appendQuery(query, "search", filters.search);
   appendQuery(query, "subjectId", filters.subjectId);
   appendQuery(query, "topic", filters.topic);
+  appendQuery(query, "classGroup", filters.classGroup);
   appendQuery(query, "page", filters.page);
   appendQuery(query, "size", filters.size);
   const suffix = query.size > 0 ? `?${query.toString()}` : "";

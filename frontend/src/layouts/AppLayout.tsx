@@ -1,7 +1,6 @@
 import {
   BarChart3,
   BookOpen,
-  ClipboardCheck,
   FilePlus2,
   Files,
   GraduationCap,
@@ -13,6 +12,7 @@ import {
   Menu,
   ScanLine,
   School,
+  Shuffle,
   UserRound,
   X
 } from "lucide-react";
@@ -27,8 +27,8 @@ const navigation = [
   { to: "/dashboard", label: "Dashboard", icon: Home },
   { to: "/provas", label: "Minhas Provas", icon: Files },
   { to: "/criar-prova", label: "Montar manualmente", icon: FilePlus2 },
-  { to: "/gerar-prova", label: "Gerar por conteúdo", icon: ClipboardCheck },
-  { to: "/conteudos", label: "Meus Conteúdos", icon: LibraryBig },
+  { to: "/gerar-prova", label: "Sortear do banco", icon: Shuffle },
+  { to: "/conteudos", label: "Planejamento", icon: LibraryBig },
   { to: "/turmas", label: "Turmas", icon: School },
   { to: "/questoes", label: "Banco de Questões", icon: BookOpen },
   { to: "/correcao", label: "Correção", icon: ScanLine },

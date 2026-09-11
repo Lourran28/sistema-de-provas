@@ -1,4 +1,4 @@
-import { BookOpen, Sparkles } from "lucide-react";
+import { BookOpen, Shuffle } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 type ExamCreationModeSwitchProps = {
@@ -24,8 +24,8 @@ export function ExamCreationModeSwitch({ mode }: ExamCreationModeSwitchProps) {
         >
           <BookOpen aria-hidden="true" className="shrink-0" size={20} />
           <span>
-            <span className="block text-sm font-semibold">Banco de questões</span>
-            <span className="mt-0.5 block text-xs leading-5 text-slate-500">Escolha as questões já salvas.</span>
+            <span className="block text-sm font-semibold">Escolher do banco</span>
+            <span className="mt-0.5 block text-xs leading-5 text-slate-500">Selecione cada questão manualmente.</span>
           </span>
         </NavLink>
         <NavLink
@@ -38,10 +38,10 @@ export function ExamCreationModeSwitch({ mode }: ExamCreationModeSwitchProps) {
           }
           to="/gerar-prova"
         >
-          <Sparkles aria-hidden="true" className="shrink-0" size={20} />
+          <Shuffle aria-hidden="true" className="shrink-0" size={20} />
           <span>
-            <span className="block text-sm font-semibold">Gerar por conteúdo</span>
-            <span className="mt-0.5 block text-xs leading-5 text-slate-500">Crie um rascunho automático para revisar.</span>
+            <span className="block text-sm font-semibold">Sortear do banco</span>
+            <span className="mt-0.5 block text-xs leading-5 text-slate-500">Defina os filtros e deixe o sistema escolher.</span>
           </span>
         </NavLink>
       </nav>

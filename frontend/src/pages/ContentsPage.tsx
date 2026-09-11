@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, FileText, Pencil, Plus, Search, Settings2, Trash2, X } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Pencil, Plus, Search, Settings2, Trash2, X } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { Button } from "../components/ui/Button";
@@ -23,6 +23,7 @@ export function ContentsPage() {
   const [filters, setFilters] = useState<ContentFilters>({});
   const [search, setSearch] = useState("");
   const [subjectId, setSubjectId] = useState("");
+  const [classGroup, setClassGroup] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [editingContent, setEditingContent] = useState<Content | undefined>();
@@ -40,7 +41,7 @@ export function ContentsPage() {
     try {
       setContentPage(await getContents(filters));
     } catch (requestError) {
-      setError(getErrorMessage(requestError, "Não foi possível carregar seus conteúdos."));
+      setError(getErrorMessage(requestError, "Não foi possível carregar seus planejamentos."));
     } finally {
       setIsLoading(false);
     }
@@ -65,6 +66,7 @@ export function ContentsPage() {
     setFilters({
       search: search.trim() || undefined,
       subjectId: subjectId || undefined,
+      classGroup: classGroup.trim() || undefined,
       page: 0,
       size: 12
     });
@@ -73,6 +75,7 @@ export function ContentsPage() {
   function clearFilters() {
     setSearch("");
     setSubjectId("");
+    setClassGroup("");
     setFilters({ page: 0, size: 12 });
   }
 
@@ -97,9 +100,9 @@ export function ContentsPage() {
 
   async function removeContent(content: Content) {
     if (!(await confirm({
-      confirmLabel: "Excluir conteúdo",
-      description: `Excluir o conteúdo “${content.title}”? Essa ação não pode ser desfeita.`,
-      title: "Excluir conteúdo",
+      confirmLabel: "Excluir planejamento",
+      description: `Excluir o planejamento “${content.title}”? Essa ação não pode ser desfeita.`,
+      title: "Excluir planejamento",
       variant: "danger"
     }))) {
       return;
@@ -114,7 +117,7 @@ export function ContentsPage() {
         await loadContents();
       }
     } catch (requestError) {
-      setError(getErrorMessage(requestError, "Não foi possível excluir o conteúdo."));
+      setError(getErrorMessage(requestError, "Não foi possível excluir o planejamento."));
     }
   }
 
@@ -136,22 +139,22 @@ export function ContentsPage() {
     <div className="space-y-6">
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-950">Meus Conteúdos</h1>
-          <p className="mt-1 text-sm text-slate-500">Materiais que servirão de fonte para as próximas avaliações.</p>
+          <h1 className="text-2xl font-semibold text-slate-950">Planejamento de Aulas</h1>
+          <p className="mt-1 text-sm text-slate-500">Organize o que será ensinado em cada turma e registre atividades para casa.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button icon={Settings2} onClick={() => setIsSubjectModalOpen(true)} type="button" variant="secondary">
             Disciplinas
           </Button>
           <Button icon={Plus} onClick={openNewContent} type="button">
-            Novo conteúdo
+            Novo planejamento
           </Button>
         </div>
       </section>
 
-      <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_auto_auto]" onSubmit={applyFilters}>
+      <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_180px_auto_auto]" onSubmit={applyFilters}>
         <label className="relative block">
-          <span className="sr-only">Pesquisar conteúdo</span>
+          <span className="sr-only">Pesquisar planejamento</span>
           <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3 text-slate-400" size={18} />
           <input
             className="h-11 w-full rounded-lg border border-stone-300 bg-white pl-10 pr-3 text-sm outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
@@ -174,6 +177,15 @@ export function ContentsPage() {
             </option>
           ))}
         </select>
+        <label>
+          <span className="sr-only">Filtrar por turma</span>
+          <input
+            className="h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
+            onChange={(event) => setClassGroup(event.target.value)}
+            placeholder="Turma"
+            value={classGroup}
+          />
+        </label>
         <Button type="submit" variant="secondary">
           Aplicar
         </Button>
@@ -195,9 +207,9 @@ export function ContentsPage() {
       />
 
       {contentPage.page.totalPages > 1 ? (
-        <nav aria-label="Paginação de conteúdos" className="flex items-center justify-between gap-3">
+        <nav aria-label="Paginação de planejamentos" className="flex items-center justify-between gap-3">
           <p className="text-sm text-slate-500">
-            {contentPage.page.totalElements} {contentPage.page.totalElements === 1 ? "conteúdo" : "conteúdos"}
+            {contentPage.page.totalElements} {contentPage.page.totalElements === 1 ? "planejamento" : "planejamentos"}
           </p>
           <div className="flex items-center gap-2">
             <Button
@@ -256,17 +268,17 @@ type ContentTableProps = {
 
 function ContentTable({ contents, isLoading, onEdit, onRemove, subjects }: ContentTableProps) {
   if (isLoading) {
-    return <Card className="px-5 py-12 text-center text-sm text-slate-500">Carregando conteúdos...</Card>;
+    return <Card className="px-5 py-12 text-center text-sm text-slate-500">Carregando planejamentos...</Card>;
   }
 
   if (contents.length === 0) {
     return (
       <Card className="px-6 py-12 text-center">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-teal-50 text-teal-800">
-          <FileText aria-hidden="true" size={22} />
+          <CalendarDays aria-hidden="true" size={22} />
         </div>
-        <h2 className="mt-4 text-lg font-semibold text-slate-950">Nenhum conteúdo encontrado</h2>
-        <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">Cadastre um material ou ajuste os filtros da busca.</p>
+        <h2 className="mt-4 text-lg font-semibold text-slate-950">Nenhum planejamento encontrado</h2>
+        <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">Planeje uma aula ou ajuste os filtros da busca.</p>
       </Card>
     );
   }
@@ -279,10 +291,10 @@ function ContentTable({ contents, isLoading, onEdit, onRemove, subjects }: Conte
         <table className="w-full border-collapse text-left">
           <thead className="border-b border-stone-200 bg-stone-50 text-xs font-semibold uppercase text-slate-500">
             <tr>
-              <th className="px-5 py-3">Conteúdo</th>
+              <th className="px-5 py-3">Aula</th>
+              <th className="px-5 py-3">Turma</th>
               <th className="px-5 py-3">Disciplina</th>
-              <th className="px-5 py-3">Tema</th>
-              <th className="px-5 py-3">Atualizado</th>
+              <th className="px-5 py-3">Data</th>
               <th className="w-28 px-5 py-3 text-right">Ações</th>
             </tr>
           </thead>
@@ -306,7 +318,7 @@ function ContentTable({ contents, isLoading, onEdit, onRemove, subjects }: Conte
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h2 className="truncate text-sm font-semibold text-slate-900">{content.title}</h2>
-                <p className="mt-1 text-sm text-slate-500">{content.theme || content.topic}</p>
+                <p className="mt-1 text-sm text-slate-500">{content.classGroup || "Turma não informada"} · {formatPlannedDate(content.plannedDate)}</p>
               </div>
               <ContentActions content={content} onEdit={onEdit} onRemove={onRemove} />
             </div>
@@ -335,9 +347,9 @@ function ContentRow({ content, onEdit, onRemove, subjectName }: ContentRowProps)
         <p className="truncate font-semibold text-slate-900">{content.title}</p>
         <p className="mt-1 truncate text-slate-500">{content.theme || content.topic}</p>
       </td>
+      <td className="px-5 py-4 font-medium text-slate-700">{content.classGroup || "Não informada"}</td>
       <td className="px-5 py-4 text-slate-600">{subjectName ?? (content.subjectId ? "Disciplina removida" : "Sem disciplina")}</td>
-      <td className="px-5 py-4 text-slate-600">{content.theme || content.topic}</td>
-      <td className="whitespace-nowrap px-5 py-4 text-slate-500">{formatDate(content.updatedAt)}</td>
+      <td className="whitespace-nowrap px-5 py-4 text-slate-600">{formatPlannedDate(content.plannedDate)}</td>
       <td className="px-5 py-4">
         <ContentActions content={content} onEdit={onEdit} onRemove={onRemove} />
       </td>
@@ -353,7 +365,7 @@ function ContentActions({ content, onEdit, onRemove }: Pick<ContentRowProps, "co
         className="h-9 w-9 px-0"
         icon={Pencil}
         onClick={() => onEdit(content)}
-        title="Editar conteúdo"
+        title="Editar planejamento"
         variant="ghost"
       />
       <Button
@@ -361,15 +373,15 @@ function ContentActions({ content, onEdit, onRemove }: Pick<ContentRowProps, "co
         className="h-9 w-9 px-0 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
         icon={Trash2}
         onClick={() => onRemove(content)}
-        title="Excluir conteúdo"
+        title="Excluir planejamento"
         variant="ghost"
       />
     </div>
   );
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" }).format(new Date(value));
+function formatPlannedDate(value: string | null) {
+  return value ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" }).format(new Date(`${value}T12:00:00`)) : "Sem data";
 }
 
 function getErrorMessage(error: unknown, fallback: string) {

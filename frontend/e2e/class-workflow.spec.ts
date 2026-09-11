@@ -25,16 +25,19 @@ test("correction requires the class and keeps the student name optional", async 
   await expect(page.getByLabel("Nome do aluno (opcional)")).toBeVisible();
 });
 
-test("content form has the requested fields and file import", async ({ page }, testInfo) => {
+test("lesson planning form has class, date, notes and file import", async ({ page }, testInfo) => {
   await authenticate(page);
   await page.route("**/api/subjects", (route) => route.fulfill({ json: [subject] }));
   await page.route(/\/api\/contents(?:\?.*)?$/, (route) => route.fulfill({ json: { items: [], page: { number: 0, size: 12, totalElements: 0, totalPages: 0 } } }));
   await page.goto("/conteudos");
   await expect(page.getByLabel("Filtrar por tema")).toHaveCount(0);
-  await page.getByRole("button", { name: "Novo conteúdo" }).click();
+  await page.getByRole("button", { name: "Novo planejamento" }).click();
   await expect(page.locator("#content-subject")).toBeVisible();
   await expect(page.locator("#content-theme")).toBeVisible();
   await expect(page.locator("#content-title")).toBeVisible();
+  await expect(page.locator("#content-class-group")).toHaveAttribute("required", "");
+  await expect(page.locator("#content-planned-date")).toHaveAttribute("type", "date");
+  await expect(page.locator("#content-notes")).toBeVisible();
   await expect(page.getByText("PDF, slides PPTX")).toBeVisible();
   const fileInput = page.locator('input[type="file"][accept*="application/pdf"]');
   await expect(fileInput).toHaveCount(1);
@@ -46,8 +49,48 @@ test("content form has the requested fields and file import", async ({ page }, t
   await expect(page.locator("#content-body")).toHaveValue(/Conteudo importado do PDF/);
   await expect(page.getByText("Texto importado de material.pdf")).toBeVisible();
   await expect(page.getByText("Assunto", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Observações", { exact: true })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("content-form.png"), fullPage: true });
+});
+
+test("draws a draft from eligible questions in the bank", async ({ page }, testInfo) => {
+  await authenticate(page);
+  let submittedQuestionIds: string[] = [];
+  const questions = ["q-1", "q-2", "q-3"].map((id, index) => ({
+    id,
+    subjectId: subject.id,
+    contentIds: [],
+    statement: `Questão ${index + 1}`,
+    imageUrl: null,
+    questionType: index === 2 ? "DISCURSIVE" : "MULTIPLE_CHOICE",
+    responseLines: 5,
+    difficulty: "MEDIUM",
+    sourceType: "MANUAL",
+    status: "ACTIVE",
+    alternatives: index === 2 ? [] : [{ id: `${id}-a`, text: "Resposta", position: 1, correct: true }],
+    createdAt: now,
+    updatedAt: now,
+  }));
+  await page.route("**/api/subjects", (route) => route.fulfill({ json: [subject] }));
+  await page.route(/\/api\/questions(?:\?.*)?$/, (route) => route.fulfill({ json: { items: questions, page: { number: 0, size: 100, totalElements: 3, totalPages: 1 } } }));
+  await page.route(/\/api\/exams$/, async (route) => {
+    const input = route.request().postDataJSON();
+    submittedQuestionIds = input.questionIds;
+    await route.fulfill({ status: 201, json: {
+      id: "random-exam", subjectId: subject.id, title: input.title, classGroup: null, topic: null, description: null, instructions: null, examDate: null,
+      totalScore: 10, questionCount: 2, kind: "PROVA", status: "DRAFT", contents: [], questions: [], createdAt: now, updatedAt: now,
+    } });
+  });
+
+  await page.goto("/gerar-prova");
+  await page.getByLabel("Título da prova").fill("Avaliação sorteada");
+  await page.getByLabel("Disciplina", { exact: true }).selectOption(subject.id);
+  await page.getByLabel("Quantidade de questões").fill("2");
+  await page.screenshot({ path: testInfo.outputPath("bank-draw.png"), fullPage: true });
+  await page.getByRole("button", { name: "Sortear e criar" }).click();
+
+  await expect.poll(() => submittedQuestionIds.length).toBe(2);
+  expect(new Set(submittedQuestionIds).size).toBe(2);
+  expect(submittedQuestionIds.every((id) => questions.some((question) => question.id === id))).toBe(true);
 });
 
 test("shows class performance and trend", async ({ page }, testInfo) => {

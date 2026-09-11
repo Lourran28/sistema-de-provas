@@ -43,11 +43,12 @@ public class ContentController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) UUID subjectId,
             @RequestParam(required = false) String topic,
+            @RequestParam(required = false) String classGroup,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "12") int size) {
         int pageSize = Math.min(Math.max(size, 1), 100);
         Pageable pageable = PageRequest.of(Math.max(page, 0), pageSize, Sort.by(Sort.Direction.DESC, "updatedAt"));
-        return contentService.list(principal.id(), search, subjectId, topic, pageable);
+        return contentService.list(principal.id(), search, subjectId, topic, classGroup, pageable);
     }
 
     @GetMapping("/topics")

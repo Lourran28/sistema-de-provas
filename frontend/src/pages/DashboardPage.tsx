@@ -1,4 +1,4 @@
-import { BookOpenCheck, CalendarClock, ChevronRight, ClipboardCheck, ClipboardList, Clock3, FilePlus2, FileText, ScanLine, Sparkles } from "lucide-react";
+import { BookOpenCheck, CalendarClock, ChevronRight, ClipboardCheck, ClipboardList, Clock3, FilePlus2, FileText, ScanLine, Shuffle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -21,8 +21,8 @@ const emptyExamPage: ExamPage = {
 
 const shortcuts = [
   { icon: FilePlus2, label: "Criar nova prova", to: "/criar-prova" },
-  { icon: Sparkles, label: "Gerar prova", to: "/gerar-prova" },
-  { icon: BookOpenCheck, label: "Meus conteúdos", to: "/conteudos" },
+  { icon: Shuffle, label: "Sortear do banco", to: "/gerar-prova" },
+  { icon: BookOpenCheck, label: "Planejar aula", to: "/conteudos" },
   { icon: ScanLine, label: "Corrigir cartão", to: "/correcao" }
 ];
 
@@ -84,7 +84,7 @@ export function DashboardPage() {
           <h1 className="mt-1 text-2xl font-semibold text-slate-950">Dashboard</h1>
           <p className="mt-1 text-sm text-slate-500">Acompanhe suas avaliações e retome o trabalho de onde parou.</p>
         </div>
-        <Button icon={Sparkles} onClick={() => navigate("/gerar-prova")}>Gerar prova</Button>
+        <Button icon={Shuffle} onClick={() => navigate("/gerar-prova")}>Sortear prova</Button>
       </section>
 
       {error ? <div aria-live="polite" className="border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">{error}</div> : null}
@@ -118,7 +118,7 @@ export function DashboardPage() {
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric color="teal" icon={FileText} label="Provas" value={isLoading ? "-" : String(examPage.page.totalElements)} />
         <Metric color="amber" icon={ClipboardList} label="Questões" value={isLoading ? "-" : String(questionCount)} />
-        <Metric color="rose" icon={BookOpenCheck} label="Conteúdos" value={isLoading ? "-" : String(contentCount)} />
+        <Metric color="rose" icon={BookOpenCheck} label="Planejamentos" value={isLoading ? "-" : String(contentCount)} />
         <Metric color="emerald" icon={ClipboardCheck} label="Correções confirmadas" value={isLoading ? "-" : String(confirmedCorrections)} />
       </section>
 
@@ -144,7 +144,7 @@ export function DashboardPage() {
             <Card className="mt-5 px-5 py-10 text-center">
               <FileText aria-hidden="true" className="mx-auto text-teal-800" size={24} />
               <h3 className="mt-3 text-base font-semibold text-slate-950">Sua primeira prova começa aqui</h3>
-              <p className="mt-1 text-sm text-slate-500">Crie manualmente ou gere uma avaliação a partir dos seus conteúdos.</p>
+              <p className="mt-1 text-sm text-slate-500">Escolha as questões manualmente ou sorteie uma avaliação a partir do banco.</p>
               <Button className="mt-4" icon={FilePlus2} onClick={() => navigate("/criar-prova")}>Criar prova</Button>
             </Card>
           ) : (

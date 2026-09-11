@@ -1,4 +1,4 @@
-import { CheckSquare, Sparkles, Trash2 } from "lucide-react";
+import { BookOpen, CheckCircle2, Shuffle, Trash2 } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -6,52 +6,50 @@ import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { useConfirmation } from "../components/ui/confirmationContext";
 import { ExamCreationModeSwitch } from "../features/exams/ExamCreationModeSwitch";
-import { getContents } from "../services/contentService";
-import { generateExam } from "../services/examService";
+import { createExam } from "../services/examService";
 import { ApiRequestError } from "../services/httpClient";
+import { getQuestions } from "../services/questionService";
 import { deleteSubject, getSubjects } from "../services/subjectService";
-import type { Content, Subject } from "../types/contents";
-import { difficultyLabels, type QuestionDifficulty } from "../types/questions";
-import { examKindLabels, type ExamKind, type QuestionDistributionMode } from "../types/exams";
+import type { Subject } from "../types/contents";
+import { examKindLabels, type ExamKind } from "../types/exams";
+import { difficultyLabels, type Question, type QuestionDifficulty } from "../types/questions";
+
+type QuestionTypeFilter = "ALL" | "OBJECTIVE" | "DISCURSIVE";
 
 export function GenerateExamPage() {
   const navigate = useNavigate();
   const { confirm } = useConfirmation();
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [contents, setContents] = useState<Content[]>([]);
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [title, setTitle] = useState("");
   const [subjectId, setSubjectId] = useState("");
   const [classGroup, setClassGroup] = useState("");
-  const [topic, setTopic] = useState("");
+  const [keyword, setKeyword] = useState("");
+  const [examDate, setExamDate] = useState("");
+  const [instructions, setInstructions] = useState("");
   const [totalScore, setTotalScore] = useState("10");
   const [totalQuestions, setTotalQuestions] = useState("5");
   const [kind, setKind] = useState<ExamKind>("PROVA");
-  const [difficulty, setDifficulty] = useState<QuestionDifficulty>("MEDIUM");
-  const [distributionMode, setDistributionMode] = useState<QuestionDistributionMode>("AUTO");
-  const [selectedContentIds, setSelectedContentIds] = useState<string[]>([]);
-  const [manualCounts, setManualCounts] = useState<Record<string, string>>({});
+  const [difficulty, setDifficulty] = useState<QuestionDifficulty>("MIXED");
+  const [questionType, setQuestionType] = useState<QuestionTypeFilter>("ALL");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let ignore = false;
-    Promise.all([getSubjects(), getContents({ size: 100 })])
-      .then(([nextSubjects, contentPage]) => {
+    Promise.all([getSubjects(), getQuestions({ size: 100 })])
+      .then(([nextSubjects, questionPage]) => {
         if (!ignore) {
           setSubjects(nextSubjects);
-          setContents(contentPage.items);
+          setQuestions(questionPage.items);
         }
       })
       .catch((requestError: unknown) => {
-        if (!ignore) {
-          setError(getErrorMessage(requestError, "Não foi possível carregar seus conteúdos."));
-        }
+        if (!ignore) setError(getErrorMessage(requestError, "Não foi possível carregar o Banco de Questões."));
       })
       .finally(() => {
-        if (!ignore) {
-          setIsLoading(false);
-        }
+        if (!ignore) setIsLoading(false);
       });
 
     return () => {
@@ -59,84 +57,43 @@ export function GenerateExamPage() {
     };
   }, []);
 
-  const selectedContents = useMemo(
-    () => selectedContentIds.map((contentId) => contents.find((content) => content.id === contentId)).filter((content): content is Content => Boolean(content)),
-    [contents, selectedContentIds]
-  );
-  const topicOptions = useMemo(
-    () => [...new Set(
-      contents
-        .filter((content) => !subjectId || content.subjectId === subjectId)
-        .map((content) => content.topic)
-    )].sort((left, right) => left.localeCompare(right, "pt-BR")),
-    [contents, subjectId]
-  );
-  const availableContents = useMemo(
-    () => contents.filter((content) => (
-      (!subjectId || content.subjectId === subjectId)
-      && (!topic || content.topic.localeCompare(topic, "pt-BR", { sensitivity: "accent" }) === 0)
-    )),
-    [contents, subjectId, topic]
-  );
-  const questionCount = Math.max(0, Number(totalQuestions) || 0);
-  const automaticCounts = useMemo(() => calculateAutoDistribution(questionCount, selectedContents.length), [questionCount, selectedContents.length]);
-  const manualTotal = selectedContents.reduce((total, content) => total + (Number(manualCounts[content.id]) || 0), 0);
-  const subjectNames = new Map(subjects.map((subject) => [subject.id, subject.name]));
-
-  function toggleContent(content: Content) {
-    const isAlreadySelected = selectedContentIds.includes(content.id);
-    setSelectedContentIds((current) => {
-      if (isAlreadySelected) {
-        return current.filter((contentId) => contentId !== content.id);
-      }
-      return [...current, content.id];
+  const eligibleQuestions = useMemo(() => {
+    const normalizedKeyword = keyword.trim().toLocaleLowerCase("pt-BR");
+    return questions.filter((question) => {
+      if (question.status !== "ACTIVE") return false;
+      if (subjectId && question.subjectId !== subjectId) return false;
+      if (difficulty !== "MIXED" && question.difficulty !== difficulty) return false;
+      if (questionType === "DISCURSIVE" && question.questionType !== "DISCURSIVE") return false;
+      if (questionType === "OBJECTIVE" && question.questionType === "DISCURSIVE") return false;
+      return !normalizedKeyword || question.statement.toLocaleLowerCase("pt-BR").includes(normalizedKeyword);
     });
-    if (!isAlreadySelected && content.subjectId) {
-      setSubjectId((currentSubjectId) => currentSubjectId || content.subjectId || "");
-    }
-    if (!isAlreadySelected) {
-      setManualCounts((currentCounts) => ({ ...currentCounts, [content.id]: currentCounts[content.id] ?? "1" }));
-    }
-  }
+  }, [difficulty, keyword, questionType, questions, subjectId]);
 
-  function changeSubject(nextSubjectId: string) {
-    setSubjectId(nextSubjectId);
-    setTopic("");
-    setSelectedContentIds([]);
-    setManualCounts({});
+  const requestedCount = Math.max(0, Number(totalQuestions) || 0);
+  const objectiveCount = eligibleQuestions.filter((question) => question.questionType !== "DISCURSIVE").length;
+  const discursiveCount = eligibleQuestions.length - objectiveCount;
+
+  function changeKind(nextKind: ExamKind) {
+    setKind(nextKind);
+    if (nextKind === "SIMULADO") setTotalQuestions("21");
   }
 
   async function removeSelectedSubject() {
     const subject = subjects.find((item) => item.id === subjectId);
     if (!subject || !(await confirm({
       confirmLabel: "Excluir disciplina",
-      description: `Excluir a disciplina “${subject.name}”? Provas, questões e conteúdos existentes serão preservados como “Sem disciplina”.`,
+      description: `Excluir a disciplina “${subject.name}”? Provas e questões existentes serão preservadas como “Sem disciplina”.`,
       title: "Excluir disciplina",
       variant: "danger"
-    }))) {
-      return;
-    }
+    }))) return;
 
     setError("");
     try {
       await deleteSubject(subject.id);
       setSubjects((current) => current.filter((item) => item.id !== subject.id));
-      changeSubject("");
+      setSubjectId("");
     } catch (requestError) {
       setError(getErrorMessage(requestError, "Não foi possível excluir a disciplina."));
-    }
-  }
-
-  function changeTopic(nextTopic: string) {
-    setTopic(nextTopic);
-    setSelectedContentIds([]);
-    setManualCounts({});
-  }
-
-  function changeKind(nextKind: ExamKind) {
-    setKind(nextKind);
-    if (nextKind === "SIMULADO") {
-      setTotalQuestions("21");
     }
   }
 
@@ -144,43 +101,36 @@ export function GenerateExamPage() {
     event.preventDefault();
     setError("");
 
-    if (selectedContents.length === 0) {
-      setError("Selecione pelo menos um conteúdo para gerar a prova.");
+    if (requestedCount < 1) {
+      setError("Informe pelo menos uma questão.");
       return;
     }
-    if (questionCount < selectedContents.length) {
-      setError("A quantidade de questões deve ser igual ou maior que a quantidade de conteúdos selecionados.");
-      return;
-    }
-    if (kind === "SIMULADO" && questionCount !== 21) {
+    if (kind === "SIMULADO" && requestedCount !== 21) {
       setError("O simulado precisa ter exatamente 21 questões.");
       return;
     }
-    if (distributionMode === "MANUAL" && manualTotal !== questionCount) {
-      setError("A soma das questões por conteúdo precisa ser igual ao total de questões.");
+    if (eligibleQuestions.length < requestedCount) {
+      setError(`O banco possui ${formatQuestionCount(eligibleQuestions.length)} com esses filtros. Reduza a quantidade ou altere os filtros.`);
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const createdExam = await generateExam({
+      const selectedQuestions = shuffle(eligibleQuestions).slice(0, requestedCount);
+      const createdExam = await createExam({
         subjectId: subjectId || undefined,
         title,
-        classGroup: classGroup || undefined,
-        topic: topic || undefined,
+        classGroup: classGroup.trim() || undefined,
+        topic: keyword.trim() || undefined,
+        instructions: instructions.trim() || undefined,
+        examDate: examDate || undefined,
         totalScore: Number(totalScore),
-        totalQuestions: questionCount,
-        difficulty,
-        distributionMode,
-        kind,
-        contents: selectedContents.map((content, index) => ({
-          contentId: content.id,
-          questionCount: distributionMode === "AUTO" ? automaticCounts[index] : Number(manualCounts[content.id])
-        }))
+        questionIds: selectedQuestions.map((question) => question.id),
+        kind
       });
       navigate(`/provas/${createdExam.id}`);
     } catch (requestError) {
-      setError(getErrorMessage(requestError, "Não foi possível gerar o rascunho da prova."));
+      setError(getErrorMessage(requestError, "Não foi possível sortear e criar o rascunho."));
     } finally {
       setIsSubmitting(false);
     }
@@ -190,232 +140,117 @@ export function GenerateExamPage() {
     <form className="space-y-6" onSubmit={handleSubmit}>
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-950">Gerar Prova</h1>
-          <p className="mt-1 text-sm text-slate-500">Crie um rascunho automático usando somente os conteúdos que você selecionar.</p>
+          <h1 className="text-2xl font-semibold text-slate-950">Sortear do Banco</h1>
+          <p className="mt-1 text-sm text-slate-500">Monte um rascunho sorteando questões que já foram revisadas e salvas.</p>
         </div>
-        <Button disabled={isSubmitting || isLoading} icon={Sparkles} type="submit">
-          {isSubmitting ? "Gerando..." : "Gerar rascunho"}
+        <Button disabled={isSubmitting || isLoading || eligibleQuestions.length < requestedCount} icon={Shuffle} type="submit">
+          {isSubmitting ? "Sorteando..." : "Sortear e criar"}
         </Button>
       </section>
 
       <ExamCreationModeSwitch mode="generated" />
 
-      {error ? (
-        <div aria-live="polite" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
-          {error}
-        </div>
-      ) : null}
+      {error ? <div aria-live="polite" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">{error}</div> : null}
 
       <fieldset className="border-y border-stone-200 py-5">
         <legend className="text-sm font-medium text-slate-700">Formato</legend>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {(["PROVA", "SIMULADO"] as ExamKind[]).map((option) => (
-            <label
-              className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm font-medium ${kind === option ? "border-teal-700 bg-teal-50 text-teal-900" : "border-stone-300 bg-white text-slate-700"}`}
-              key={option}
-            >
-              <input
-                checked={kind === option}
-                className="h-4 w-4 border-stone-300 text-teal-700 focus:ring-teal-700"
-                name="generated-exam-kind"
-                onChange={() => changeKind(option)}
-                type="radio"
-              />
+            <label className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm font-medium ${kind === option ? "border-teal-700 bg-teal-50 text-teal-900" : "border-stone-300 bg-white text-slate-700"}`} key={option}>
+              <input checked={kind === option} className="h-4 w-4 border-stone-300 text-teal-700 focus:ring-teal-700" name="random-exam-kind" onChange={() => changeKind(option)} type="radio" />
               <span>{option === "SIMULADO" ? "Simulado (21 questões)" : examKindLabels[option]}</span>
             </label>
           ))}
         </div>
-        {kind === "SIMULADO" ? <p className="mt-2 text-xs leading-5 text-slate-500">O total foi definido em 21 questões para este simulado.</p> : null}
       </fieldset>
 
       <section className="grid gap-5 lg:grid-cols-3">
-        <label className="block text-sm font-medium text-slate-700" htmlFor="generated-exam-title">
-          Título da prova
-          <input
-            className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-950 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
-            id="generated-exam-title"
-            maxLength={180}
-            onChange={(event) => setTitle(event.target.value)}
-            required
-            value={title}
-          />
+        <label className="block text-sm font-medium text-slate-700" htmlFor="random-exam-title">Título da prova
+          <input className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-950 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id="random-exam-title" maxLength={180} onChange={(event) => setTitle(event.target.value)} required value={title} />
         </label>
         <div className="block text-sm font-medium text-slate-700">
-          <label htmlFor="generated-exam-subject">Disciplina</label>
+          <label htmlFor="random-exam-subject">Disciplina</label>
           <div className="mt-2 flex gap-2">
-            <select
-            className="h-11 min-w-0 flex-1 rounded-lg border border-stone-300 bg-white px-3 text-slate-800 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
-            id="generated-exam-subject"
-            onChange={(event) => changeSubject(event.target.value)}
-            value={subjectId}
-          >
-            <option value="">Sem disciplina</option>
-            {subjects.map((subject) => (
-              <option key={subject.id} value={subject.id}>
-                {subject.name}
-              </option>
-            ))}
+            <select className="h-11 min-w-0 flex-1 rounded-lg border border-stone-300 bg-white px-3 text-slate-800 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id="random-exam-subject" onChange={(event) => setSubjectId(event.target.value)} value={subjectId}>
+              <option value="">Todas as disciplinas</option>
+              {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
             </select>
             <Button aria-label="Excluir disciplina selecionada" className="h-11 w-11 shrink-0 px-0 text-rose-700 hover:bg-rose-50 hover:text-rose-800" disabled={!subjectId} icon={Trash2} onClick={() => void removeSelectedSubject()} title="Excluir disciplina selecionada" type="button" variant="secondary" />
           </div>
         </div>
-        <label className="block text-sm font-medium text-slate-700" htmlFor="generated-exam-class-group">
-          Turma
-          <input
-            className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-950 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
-            id="generated-exam-class-group"
-            maxLength={120}
-            onChange={(event) => setClassGroup(event.target.value)}
-            value={classGroup}
-          />
+        <label className="block text-sm font-medium text-slate-700" htmlFor="random-exam-class-group">Turma
+          <input className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-950 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id="random-exam-class-group" maxLength={120} onChange={(event) => setClassGroup(event.target.value)} value={classGroup} />
         </label>
-        <label className="block text-sm font-medium text-slate-700" htmlFor="generated-exam-topic">
-          Assunto do banco
-          <select
-            className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-800 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
-            id="generated-exam-topic"
-            onChange={(event) => changeTopic(event.target.value)}
-            value={topic}
-          >
-            <option value="">Todos os assuntos</option>
-            {topicOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-          </select>
+        <label className="block text-sm font-medium text-slate-700" htmlFor="random-exam-keyword">Palavra-chave
+          <input className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-950 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id="random-exam-keyword" maxLength={160} onChange={(event) => setKeyword(event.target.value)} placeholder="Opcional: verbo, crase..." value={keyword} />
         </label>
-        <label className="block text-sm font-medium text-slate-700" htmlFor="generated-exam-total-score">
-          Nota total
-          <input
-            className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-950 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
-            id="generated-exam-total-score"
-            min="0.01"
-            onChange={(event) => setTotalScore(event.target.value)}
-            required
-            step="0.01"
-            type="number"
-            value={totalScore}
-          />
+        <label className="block text-sm font-medium text-slate-700" htmlFor="random-exam-date">Data da prova
+          <input className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-950 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id="random-exam-date" onChange={(event) => setExamDate(event.target.value)} type="date" value={examDate} />
         </label>
-        <label className="block text-sm font-medium text-slate-700" htmlFor="generated-exam-question-count">
-          Quantidade de questões
-          <input
-            className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-950 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
-            id="generated-exam-question-count"
-            min="1"
-            max="100"
-            disabled={kind === "SIMULADO"}
-            onChange={(event) => setTotalQuestions(event.target.value)}
-            required
-            type="number"
-            value={totalQuestions}
-          />
+        <label className="block text-sm font-medium text-slate-700" htmlFor="random-exam-total-score">Nota total
+          <input className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-950 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id="random-exam-total-score" min="0.01" onChange={(event) => setTotalScore(event.target.value)} required step="0.01" type="number" value={totalScore} />
         </label>
       </section>
 
-      <section className="flex flex-col gap-4 border-y border-stone-200 py-5 sm:flex-row sm:items-end sm:justify-between">
-        <label className="block w-full text-sm font-medium text-slate-700 sm:max-w-56" htmlFor="generated-exam-difficulty">
-          Dificuldade
-          <select
-            className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-800 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
-            id="generated-exam-difficulty"
-            onChange={(event) => setDifficulty(event.target.value as QuestionDifficulty)}
-            value={difficulty}
-          >
-            {Object.entries(difficultyLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
+      <section className="grid gap-5 border-y border-stone-200 py-5 md:grid-cols-3">
+        <label className="block text-sm font-medium text-slate-700" htmlFor="random-exam-difficulty">Dificuldade
+          <select className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-800 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id="random-exam-difficulty" onChange={(event) => setDifficulty(event.target.value as QuestionDifficulty)} value={difficulty}>
+            {Object.entries(difficultyLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </label>
-
-        <fieldset className="flex flex-wrap gap-3">
-          <legend className="mb-2 text-sm font-medium text-slate-700">Distribuição das questões</legend>
-          <label className="flex h-11 cursor-pointer items-center gap-2 rounded-lg border border-stone-300 bg-white px-3 text-sm font-medium text-slate-700">
-            <input checked={distributionMode === "AUTO"} name="distribution-mode" onChange={() => setDistributionMode("AUTO")} type="radio" />
-            Automática
-          </label>
-          <label className="flex h-11 cursor-pointer items-center gap-2 rounded-lg border border-stone-300 bg-white px-3 text-sm font-medium text-slate-700">
-            <input checked={distributionMode === "MANUAL"} name="distribution-mode" onChange={() => setDistributionMode("MANUAL")} type="radio" />
-            Manual
-          </label>
-        </fieldset>
+        <label className="block text-sm font-medium text-slate-700" htmlFor="random-exam-question-type">Tipo de questão
+          <select className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-800 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id="random-exam-question-type" onChange={(event) => setQuestionType(event.target.value as QuestionTypeFilter)} value={questionType}>
+            <option value="ALL">Objetivas e abertas</option>
+            <option value="OBJECTIVE">Somente objetivas</option>
+            <option value="DISCURSIVE">Somente abertas</option>
+          </select>
+        </label>
+        <label className="block text-sm font-medium text-slate-700" htmlFor="random-exam-question-count">Quantidade de questões
+          <input className="mt-2 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-950 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100" disabled={kind === "SIMULADO"} id="random-exam-question-count" max="100" min="1" onChange={(event) => setTotalQuestions(event.target.value)} required type="number" value={totalQuestions} />
+        </label>
       </section>
 
-      <section>
-        <div>
-          <h2 className="text-lg font-semibold text-slate-950">Selecionar conteúdos</h2>
-          <p className="mt-1 text-sm text-slate-500">Somente os materiais marcados no assunto selecionado serão usados para formular as questões.</p>
-        </div>
+      <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <label className="block text-sm font-medium text-slate-700" htmlFor="random-exam-instructions">Instruções ao aluno
+          <textarea className="mt-2 min-h-32 w-full resize-y rounded-lg border border-stone-300 bg-white px-3 py-3 leading-6 text-slate-950 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id="random-exam-instructions" maxLength={10000} onChange={(event) => setInstructions(event.target.value)} placeholder="Opcional" value={instructions} />
+        </label>
 
-        {isLoading ? (
-          <Card className="mt-5 px-5 py-12 text-center text-sm text-slate-500">Carregando conteúdos...</Card>
-        ) : availableContents.length === 0 ? (
-          <Card className="mt-5 px-6 py-12 text-center">
-            <CheckSquare aria-hidden="true" className="mx-auto text-teal-800" size={24} />
-            <h3 className="mt-4 text-base font-semibold text-slate-950">Nenhum conteúdo para este assunto</h3>
-            <p className="mt-2 text-sm text-slate-500">Escolha outro assunto ou cadastre um novo material de referência.</p>
-          </Card>
-        ) : (
-          <div className="mt-5 divide-y divide-stone-200 border-y border-stone-200">
-            {availableContents.map((content) => {
-              const selectedIndex = selectedContentIds.indexOf(content.id);
-              const isSelected = selectedIndex >= 0;
-              const automaticCount = selectedIndex >= 0 ? automaticCounts[selectedIndex] : 0;
-              return (
-                <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between" key={content.id}>
-                  <label className="flex min-w-0 cursor-pointer items-start gap-3">
-                    <input
-                      checked={isSelected}
-                      className="mt-1 h-4 w-4 rounded border-stone-300 text-teal-700 focus:ring-teal-700"
-                      onChange={() => toggleContent(content)}
-                      type="checkbox"
-                    />
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold text-slate-900">{content.title}</span>
-                      <span className="mt-1 block text-sm text-slate-500">{content.subjectId ? subjectNames.get(content.subjectId) ?? "Disciplina removida" : "Sem disciplina"} · {content.topic}</span>
-                    </span>
-                  </label>
-                  {isSelected ? (
-                    distributionMode === "MANUAL" ? (
-                      <label className="flex shrink-0 items-center gap-2 text-sm text-slate-600" htmlFor={`content-count-${content.id}`}>
-                        Questões
-                        <input
-                          className="h-10 w-20 rounded-lg border border-stone-300 px-2 text-center text-slate-950 outline-none transition focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
-                          id={`content-count-${content.id}`}
-                          min="1"
-                          onChange={(event) => setManualCounts((current) => ({ ...current, [content.id]: event.target.value }))}
-                          type="number"
-                          value={manualCounts[content.id] ?? "1"}
-                        />
-                      </label>
-                    ) : (
-                      <span className="shrink-0 rounded-md bg-teal-50 px-2 py-1 text-xs font-semibold text-teal-800">{formatQuestionCount(automaticCount)}</span>
-                    )
-                  ) : null}
-                </div>
-              );
-            })}
+        <Card className="p-5">
+          <div className="flex items-center gap-2">
+            <BookOpen aria-hidden="true" className="text-teal-800" size={20} />
+            <h2 className="font-semibold text-slate-950">Banco disponível</h2>
           </div>
-        )}
-
-        {selectedContents.length > 0 ? (
-          <p className="mt-4 text-sm text-slate-600">
-            {distributionMode === "AUTO"
-              ? `${selectedContents.length} ${selectedContents.length === 1 ? "conteúdo selecionado" : "conteúdos selecionados"}. A distribuição será feita automaticamente.`
-              : `Distribuição manual: ${manualTotal} de ${formatQuestionCount(questionCount)} atribuídas.`}
-          </p>
-        ) : null}
+          {isLoading ? <p className="mt-4 text-sm text-slate-500">Carregando questões...</p> : (
+            <dl className="mt-4 space-y-3 text-sm">
+              <SummaryRow label="Questões encontradas" value={eligibleQuestions.length} />
+              <SummaryRow label="Objetivas" value={objectiveCount} />
+              <SummaryRow label="Abertas" value={discursiveCount} />
+              <SummaryRow label="Serão sorteadas" value={requestedCount} />
+            </dl>
+          )}
+          {!isLoading && eligibleQuestions.length >= requestedCount && requestedCount > 0 ? (
+            <p className="mt-5 flex items-start gap-2 text-sm leading-6 text-teal-800"><CheckCircle2 aria-hidden="true" className="mt-0.5 shrink-0" size={17} />Há questões suficientes para realizar o sorteio.</p>
+          ) : null}
+          {!isLoading && eligibleQuestions.length === 0 ? <p className="mt-5 text-sm leading-6 text-amber-800">Nenhuma questão corresponde aos filtros. Ajuste-os ou cadastre novas questões no banco.</p> : null}
+        </Card>
       </section>
     </form>
   );
 }
 
-function calculateAutoDistribution(totalQuestions: number, contentCount: number) {
-  if (contentCount === 0) {
-    return [];
+function SummaryRow({ label, value }: { label: string; value: number }) {
+  return <div className="flex items-center justify-between gap-4 text-slate-600"><dt>{label}</dt><dd className="font-semibold text-slate-950">{value}</dd></div>;
+}
+
+function shuffle<T>(items: T[]) {
+  const result = [...items];
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const random = new Uint32Array(1);
+    crypto.getRandomValues(random);
+    const selectedIndex = random[0] % (index + 1);
+    [result[index], result[selectedIndex]] = [result[selectedIndex], result[index]];
   }
-  const base = Math.floor(totalQuestions / contentCount);
-  const remainder = totalQuestions % contentCount;
-  return Array.from({ length: contentCount }, (_, index) => base + (index < remainder ? 1 : 0));
+  return result;
 }
 
 function formatQuestionCount(count: number) {

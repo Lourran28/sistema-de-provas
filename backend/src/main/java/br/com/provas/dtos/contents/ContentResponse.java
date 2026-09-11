@@ -1,6 +1,7 @@
 package br.com.provas.dtos.contents;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 import br.com.provas.entities.ContentEntity;
@@ -13,6 +14,8 @@ public record ContentResponse(
         String theme,
         String body,
         String notes,
+        String classGroup,
+        LocalDate plannedDate,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -25,6 +28,8 @@ public record ContentResponse(
                 content.getTheme(),
                 content.getBody(),
                 content.getNotes(),
+                content.getClassGroup(),
+                content.getPlannedDate(),
                 content.getCreatedAt(),
                 content.getUpdatedAt());
     }

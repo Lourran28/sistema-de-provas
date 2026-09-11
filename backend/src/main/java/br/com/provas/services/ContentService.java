@@ -32,9 +32,10 @@ public class ContentService {
     }
 
     @Transactional(readOnly = true)
-    public ContentPageResponse list(UUID teacherId, String search, UUID subjectId, String topic, Pageable pageable) {
+    public ContentPageResponse list(UUID teacherId, String search, UUID subjectId, String topic, String classGroup, Pageable pageable) {
         String normalizedSearch = normalizeOptional(search);
         String normalizedTopic = normalizeOptional(topic);
+        String normalizedClassGroup = normalizeOptional(classGroup);
         Specification<ContentEntity> filters = (root, query, builder) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(builder.equal(root.get("teacherId"), teacherId));
@@ -50,6 +51,9 @@ public class ContentService {
             }
             if (normalizedTopic != null) {
                 predicates.add(builder.equal(builder.lower(root.get("topic")), normalizedTopic.toLowerCase(Locale.ROOT)));
+            }
+            if (normalizedClassGroup != null) {
+                predicates.add(builder.equal(builder.lower(root.get("classGroup")), normalizedClassGroup.toLowerCase(Locale.ROOT)));
             }
             return builder.and(predicates.toArray(Predicate[]::new));
         };
@@ -76,7 +80,9 @@ public class ContentService {
                 normalizeRequired(request.topic()),
                 normalizeOptional(request.theme()),
                 request.body().trim(),
-                normalizeOptional(request.notes()));
+                normalizeOptional(request.notes()),
+                normalizeOptional(request.classGroup()),
+                request.plannedDate());
         return ContentResponse.from(contentRepository.save(content));
     }
 
@@ -89,7 +95,9 @@ public class ContentService {
                 normalizeRequired(request.topic()),
                 normalizeOptional(request.theme()),
                 request.body().trim(),
-                normalizeOptional(request.notes()));
+                normalizeOptional(request.notes()),
+                normalizeOptional(request.classGroup()),
+                request.plannedDate());
         return ContentResponse.from(contentRepository.save(content));
     }
 

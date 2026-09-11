@@ -1,5 +1,6 @@
 package br.com.provas.dtos.contents;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 import jakarta.validation.constraints.NotBlank;
@@ -19,5 +20,8 @@ public record ContentRequest(
         @Size(max = 50000, message = "O material deve ter no máximo 50000 caracteres.")
         String body,
         @Size(max = 10000, message = "As observações devem ter no máximo 10000 caracteres.")
-        String notes) {
+        String notes,
+        @Size(max = 120, message = "A turma deve ter no máximo 120 caracteres.")
+        String classGroup,
+        LocalDate plannedDate) {
 }

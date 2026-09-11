@@ -1,6 +1,7 @@
 package br.com.provas.entities;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -38,6 +39,12 @@ public class ContentEntity {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    @Column(name = "class_group", length = 120)
+    private String classGroup;
+
+    @Column(name = "planned_date")
+    private LocalDate plannedDate;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -55,6 +62,19 @@ public class ContentEntity {
             String theme,
             String body,
             String notes) {
+        this(teacherId, subjectId, title, topic, theme, body, notes, null, null);
+    }
+
+    public ContentEntity(
+            UUID teacherId,
+            UUID subjectId,
+            String title,
+            String topic,
+            String theme,
+            String body,
+            String notes,
+            String classGroup,
+            LocalDate plannedDate) {
         this.id = UUID.randomUUID();
         this.teacherId = teacherId;
         this.subjectId = subjectId;
@@ -63,6 +83,8 @@ public class ContentEntity {
         this.theme = theme;
         this.body = body;
         this.notes = notes;
+        this.classGroup = classGroup;
+        this.plannedDate = plannedDate;
     }
 
     @PrePersist
@@ -82,13 +104,15 @@ public class ContentEntity {
         updatedAt = Instant.now();
     }
 
-    public void update(UUID subjectId, String title, String topic, String theme, String body, String notes) {
+    public void update(UUID subjectId, String title, String topic, String theme, String body, String notes, String classGroup, LocalDate plannedDate) {
         this.subjectId = subjectId;
         this.title = title;
         this.topic = topic;
         this.theme = theme;
         this.body = body;
         this.notes = notes;
+        this.classGroup = classGroup;
+        this.plannedDate = plannedDate;
     }
 
     public UUID getId() {
@@ -121,6 +145,14 @@ public class ContentEntity {
 
     public String getNotes() {
         return notes;
+    }
+
+    public String getClassGroup() {
+        return classGroup;
+    }
+
+    public LocalDate getPlannedDate() {
+        return plannedDate;
     }
 
     public Instant getCreatedAt() {

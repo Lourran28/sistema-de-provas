@@ -52,7 +52,7 @@ export function SubjectManagerModal({ onClose, onRefresh, subjects }: SubjectMan
   async function handleDelete(subject: Subject) {
     if (!(await confirm({
       confirmLabel: "Excluir disciplina",
-      description: `Excluir a disciplina “${subject.name}”? Conteúdos e provas já cadastrados serão preservados.`,
+      description: `Excluir a disciplina “${subject.name}”? Planejamentos, questões e provas já cadastrados serão preservados.`,
       title: "Excluir disciplina",
       variant: "danger"
     }))) {

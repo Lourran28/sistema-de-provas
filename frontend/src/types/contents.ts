@@ -19,6 +19,8 @@ export type Content = {
   theme: string | null;
   body: string;
   notes: string | null;
+  classGroup: string | null;
+  plannedDate: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -30,12 +32,15 @@ export type ContentInput = {
   theme?: string;
   body: string;
   notes?: string;
+  classGroup?: string;
+  plannedDate?: string;
 };
 
 export type ContentFilters = {
   search?: string;
   subjectId?: string;
   topic?: string;
+  classGroup?: string;
   page?: number;
   size?: number;
 };
