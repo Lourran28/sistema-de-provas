@@ -33,6 +33,23 @@ export function ContentFormModal({ content, onClose, onCreateSubject, onSave, su
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+
+    const missingField = [
+      { id: "content-subject", message: "Informe a disciplina para salvar o planejamento.", value: subjectName },
+      { id: "content-theme", message: "Informe o tema para salvar o planejamento.", value: theme },
+      { id: "content-title", message: "Informe o título para salvar o planejamento.", value: title },
+      { id: "content-class-group", message: "Informe a turma para salvar o planejamento.", value: classGroup },
+      { id: "content-body", message: "Informe o plano da aula para salvar o planejamento.", value: body },
+    ].find((field) => !field.value.trim());
+
+    if (missingField) {
+      setError(missingField.message);
+      const field = document.getElementById(missingField.id);
+      field?.scrollIntoView({ behavior: "smooth", block: "center" });
+      field?.focus();
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const normalizedSubjectName = subjectName.trim();
@@ -82,7 +99,7 @@ export function ContentFormModal({ content, onClose, onCreateSubject, onSave, su
   }
 
   return <ModalDialog onClose={onClose} title={content ? "Editar planejamento" : "Novo planejamento"}>
-    <form className="divide-y divide-stone-200" onSubmit={handleSubmit}>
+    <form className="divide-y divide-stone-200" noValidate onSubmit={handleSubmit}>
       <div className="max-h-[68vh] space-y-5 overflow-y-auto px-5 py-6 sm:px-6">
         {error ? <div aria-live="polite" className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" role="alert">{error}</div> : null}
         <div className="grid gap-5 sm:grid-cols-2">
@@ -99,7 +116,7 @@ export function ContentFormModal({ content, onClose, onCreateSubject, onSave, su
           <input className="mt-2 h-11 w-full rounded-lg border border-stone-300 px-3 text-slate-950 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id="content-title" maxLength={180} onChange={(event) => setTitle(event.target.value)} required value={title} />
         </label>
         <div className="grid gap-5 sm:grid-cols-2">
-          <label className="block text-sm font-medium text-slate-700" htmlFor="content-class-group">Turma
+          <label className="block text-sm font-medium text-slate-700" htmlFor="content-class-group">Turma <span className="text-rose-700" aria-hidden="true">*</span><span className="sr-only">(obrigatória)</span>
             <input className="mt-2 h-11 w-full rounded-lg border border-stone-300 px-3 text-slate-950 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100" id="content-class-group" maxLength={120} onChange={(event) => setClassGroup(event.target.value)} placeholder="Ex.: 8º A" required value={classGroup} />
           </label>
           <label className="block text-sm font-medium text-slate-700" htmlFor="content-planned-date">Data da aula

@@ -52,6 +52,56 @@ test("lesson planning form has class, date, notes and file import", async ({ pag
   await page.screenshot({ path: testInfo.outputPath("content-form.png"), fullPage: true });
 });
 
+test("lesson planning explains missing fields and persists an edit", async ({ page }) => {
+  await authenticate(page);
+  const content = {
+    id: "content-1",
+    subjectId: subject.id,
+    title: "Português: leitura, gramática e interpretação",
+    topic: "Verbos, interpretação e gramática",
+    theme: "Verbos, interpretação e gramática",
+    body: "Plano da aula",
+    notes: null,
+    classGroup: null,
+    plannedDate: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  let savedContent = content;
+  let submitted: Record<string, unknown> | undefined;
+
+  await page.route("**/api/subjects", (route) => route.fulfill({ json: [subject] }));
+  await page.route(/\/api\/contents(?:\?.*)?$/, (route) => route.fulfill({
+    json: { items: [savedContent], page: { number: 0, size: 12, totalElements: 1, totalPages: 1 } },
+  }));
+  await page.route("**/api/contents/content-1", async (route) => {
+    submitted = route.request().postDataJSON() as Record<string, unknown>;
+    savedContent = { ...savedContent, ...submitted, updatedAt: "2026-09-11T04:30:00Z" };
+    await route.fulfill({ json: savedContent });
+  });
+
+  await page.goto("/conteudos");
+  await page.getByRole("button", { name: `Editar ${content.title}` }).click();
+  await page.getByRole("button", { name: "Salvar alterações" }).click();
+  await expect(page.getByRole("alert")).toHaveText("Informe a turma para salvar o planejamento.");
+
+  await page.locator("#content-class-group").fill("8º A");
+  await page.locator("#content-planned-date").fill("2026-09-15");
+  await page.locator("#content-notes").fill("Responder às atividades 1 a 5 do caderno.");
+  await page.getByRole("button", { name: "Salvar alterações" }).click();
+
+  await expect.poll(() => submitted).toMatchObject({
+    classGroup: "8º A",
+    plannedDate: "2026-09-15",
+    notes: "Responder às atividades 1 a 5 do caderno.",
+  });
+  await expect(page.getByRole("status")).toHaveText("Planejamento atualizado com sucesso.");
+  await page.getByRole("button", { name: `Editar ${content.title}` }).click();
+  await expect(page.locator("#content-class-group")).toHaveValue("8º A");
+  await expect(page.locator("#content-planned-date")).toHaveValue("2026-09-15");
+  await expect(page.locator("#content-notes")).toHaveValue("Responder às atividades 1 a 5 do caderno.");
+});
+
 test("draws a draft from eligible questions in the bank", async ({ page }, testInfo) => {
   await authenticate(page);
   let submittedQuestionIds: string[] = [];

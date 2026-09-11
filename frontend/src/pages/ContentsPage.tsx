@@ -26,6 +26,7 @@ export function ContentsPage() {
   const [classGroup, setClassGroup] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [editingContent, setEditingContent] = useState<Content | undefined>();
   const [isContentModalOpen, setIsContentModalOpen] = useState(false);
   const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
@@ -84,12 +85,14 @@ export function ContentsPage() {
   }
 
   async function saveContent(input: ContentInput) {
+    const isEditing = Boolean(editingContent);
     if (editingContent) {
       await updateContent(editingContent.id, input);
     } else {
       await createContent(input);
     }
     await loadContents();
+    setNotice(isEditing ? "Planejamento atualizado com sucesso." : "Planejamento salvo com sucesso.");
   }
 
   async function createAndSelectSubject(name: string) {
@@ -122,11 +125,13 @@ export function ContentsPage() {
   }
 
   function openNewContent() {
+    setNotice("");
     setEditingContent(undefined);
     setIsContentModalOpen(true);
   }
 
   function openEditContent(content: Content) {
+    setNotice("");
     setEditingContent(content);
     setIsContentModalOpen(true);
   }
@@ -195,6 +200,12 @@ export function ContentsPage() {
       {error ? (
         <div aria-live="polite" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
           {error}
+        </div>
+      ) : null}
+
+      {notice ? (
+        <div aria-live="polite" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
+          {notice}
         </div>
       ) : null}
 
