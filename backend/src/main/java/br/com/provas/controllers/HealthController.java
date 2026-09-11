@@ -14,7 +14,6 @@ public class HealthController {
 
     @GetMapping("/health")
     public HealthResponse health() {
-        return new HealthResponse("ok", "backend", Instant.now());
+        return new HealthResponse("ok", "backend", 12, Instant.now());
     }
 }
-

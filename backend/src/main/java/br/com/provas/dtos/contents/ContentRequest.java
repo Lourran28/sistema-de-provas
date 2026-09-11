@@ -21,6 +21,7 @@ public record ContentRequest(
         String body,
         @Size(max = 10000, message = "As observações devem ter no máximo 10000 caracteres.")
         String notes,
+        @NotBlank(message = "Informe a turma do planejamento.")
         @Size(max = 120, message = "A turma deve ter no máximo 120 caracteres.")
         String classGroup,
         LocalDate plannedDate) {

@@ -86,11 +86,13 @@ export function ContentsPage() {
 
   async function saveContent(input: ContentInput) {
     const isEditing = Boolean(editingContent);
+    let savedContent: Content;
     if (editingContent) {
-      await updateContent(editingContent.id, input);
+      savedContent = await updateContent(editingContent.id, input);
     } else {
-      await createContent(input);
+      savedContent = await createContent(input);
     }
+    assertPlanningFieldsWereSaved(savedContent, input);
     await loadContents();
     setNotice(isEditing ? "Planejamento atualizado com sucesso." : "Planejamento salvo com sucesso.");
   }
@@ -397,4 +399,15 @@ function formatPlannedDate(value: string | null) {
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof ApiRequestError ? error.message : fallback;
+}
+
+function assertPlanningFieldsWereSaved(content: Content, input: ContentInput) {
+  const expectedClassGroup = input.classGroup?.trim() || null;
+  const expectedPlannedDate = input.plannedDate || null;
+  const expectedNotes = input.notes?.trim() || null;
+  if ((content.classGroup ?? null) !== expectedClassGroup
+    || (content.plannedDate ?? null) !== expectedPlannedDate
+    || (content.notes ?? null) !== expectedNotes) {
+    throw new Error("O servidor não confirmou os dados do planejamento. Aguarde a atualização da API e tente novamente.");
+  }
 }
