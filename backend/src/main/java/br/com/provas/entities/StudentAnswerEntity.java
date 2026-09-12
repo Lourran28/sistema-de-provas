@@ -12,9 +12,14 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 @Entity
-@Table(name = "student_answers")
+@Table(
+        name = "student_answers",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uq_student_answers_question",
+                columnNames = {"correction_id", "exam_version_question_id"}))
 public class StudentAnswerEntity {
 
     @Id
